@@ -1,74 +1,107 @@
 <div align="center">
+  <img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=4F8EF7,9B59FF&height=120&section=header&text=PeerLearn&fontSize=40&fontColor=ffffff&fontAlignY=38&animation=fadeIn"/>
+</div>
 
-<img src="https://img.shields.io/badge/Platform-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white"/>
-<img src="https://img.shields.io/badge/Language-Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white"/>
-<img src="https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white"/>
-<img src="https://img.shields.io/badge/Backend-Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black"/>
-<img src="https://img.shields.io/badge/Status-In%20Development-FF6B6B?style=for-the-badge"/>
+<div align="center">
 
-# 📚 PeerLearn
-### *Learn Together. Grow Together.*
+```
+┌─────────────────────────────────────────┐
+│                                         │
+│   📚  Learn Together. Grow Together.   │
+│                                         │
+└─────────────────────────────────────────┘
+```
 
-> A peer-to-peer learning Android app where students connect, share knowledge, and grow together — built with modern Android tech stack.
-
-[![GitHub stars](https://img.shields.io/github/stars/SAHILMASKE79/peerlearn?style=social)](https://github.com/SAHILMASKE79/peerlearn)
-[![GitHub forks](https://img.shields.io/github/forks/SAHILMASKE79/peerlearn?style=social)](https://github.com/SAHILMASKE79/peerlearn)
+![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
+![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=flat-square&logo=firebase&logoColor=black)
+![Android](https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Building_🔨-FF6B6B?style=flat-square)
 
 </div>
 
 ---
 
-## ✨ Features
-
-| Feature | Status |
-|---------|--------|
-| 🔐 Email & Google Authentication | ✅ Done |
-| 👤 User Profile Setup | 🔨 In Progress |
-| 🏠 Home Feed | 🔨 In Progress |
-| 🤝 Peer Matching | 📋 Planned |
-| 💬 Real-time Chat | 📋 Planned |
-| 📖 Study Sessions | 📋 Planned |
-
----
-
-## 🛠️ Tech Stack
-Language        →  Kotlin
-UI Framework    →  Jetpack Compose
-Architecture    →  MVVM
-Authentication  →  Firebase Auth (Email + Google)
-Database        →  Cloud Firestore
-Storage         →  Firebase Storage
-Animation       →  Compose Animations
-Min SDK         →  API 25 (Android 7.1)
+```kotlin
+object PeerLearn {
+    val mission    = "Connect students. Share knowledge. Grow together."
+    val platform   = "Android"
+    val language   = "Kotlin"
+    val ui         = "Jetpack Compose"
+    val backend    = "Firebase"
+    val status     = "Phase 1 — In Development 🔨"
+}
+```
 
 ---
 
-## 🗺️ Roadmap
-Phase 1  →  Auth + Login UI          ← Currently here 🔨
-Phase 2  →  Profile + Home Screen
-Phase 3  →  Peer Matching System
-Phase 4  →  Real-time Chat
-Phase 5  →  Study Session Booking
-Phase 6  →  Play Store Launch 🚀
+## `what's inside`
+
+```
+📦 PeerLearn
+ ┣ 🔐 Auth          →  Email + Google Sign-in (Firebase)
+ ┣ 👤 Profile       →  User setup & preferences
+ ┣ 🏠 Home Feed     →  Discover peers & topics
+ ┣ 🤝 Peer Match    →  Smart student matching
+ ┣ 💬 Chat          →  Real-time messaging
+ ┗ 📖 Sessions      →  Book study sessions
+```
 
 ---
 
-## 👨‍💻 Developer
+## `progress`
 
-**Sahil Maske** — Android Developer, Nagpur 🇮🇳
+| Phase | What | Status |
+|-------|------|--------|
+| 01 | Auth + Login UI | 🔨 Building |
+| 02 | Profile + Home | ⏳ Next |
+| 03 | Peer Matching | 📋 Planned |
+| 04 | Real-time Chat | 📋 Planned |
+| 05 | Study Sessions | 📋 Planned |
+| 06 | Play Store 🚀 | 🎯 Goal |
 
-Self-taught. Self-driven. Building real things. 💪
+---
 
-[![GitHub](https://img.shields.io/badge/GitHub-SAHILMASKE79-181717?style=flat&logo=github)](https://github.com/SAHILMASKE79)
+## `run it`
+
+```bash
+git clone https://github.com/SAHILMASKE79/PeerLearn.git
+# Add your google-services.json in /app
+# Open in Android Studio → Run
+```
+
+---
+
+## `stack`
+
+```
+UI          →   Jetpack Compose + Material 3
+Language    →   Kotlin (100%)
+Auth        →   Firebase Authentication
+Database    →   Cloud Firestore
+Storage     →   Firebase Storage
+Pattern     →   MVVM + Clean Architecture
+Min SDK     →   API 25 · Android 7.1+
+```
 
 ---
 
 <div align="center">
 
-Made with ❤️ by Sahil Maske
+```
+╔══════════════════════════════════════╗
+║                                      ║
+║   built by  SAHIL MASKE              ║
+║   android developer · nagpur 🇮🇳     ║
+║   self-taught · self-driven 💪       ║
+║                                      ║
+╚══════════════════════════════════════╝
+```
 
-*"Jo khud se karte hain, woh alag hote hain."*
+[![GitHub](https://img.shields.io/badge/github-SAHILMASKE79-181717?style=flat-square&logo=github)](https://github.com/SAHILMASKE79)
 
-⭐ Star karo agar useful laga!
+*"jo khud se karte hain — woh alag hote hain."*
+
+<img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=9B59FF,4F8EF7&height=80&section=footer"/>
 
 </div>
