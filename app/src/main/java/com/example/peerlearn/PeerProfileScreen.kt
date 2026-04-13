@@ -1,0 +1,553 @@
+package com.sahil.peerlearn
+
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.sahil.peerlearn.ui.theme.*
+
+@Composable
+fun PeerProfileScreen(
+    peerUid: String,
+    navController: NavController,
+    viewModel: PeerProfileViewModel = viewModel()
+) {
+    if (peerUid.isEmpty()) {
+        navController.popBackStack()
+        return
+    }
+
+    val peerProfile by viewModel.peerProfile.collectAsState()
+    val connectionDetails by viewModel.connectionDetails.collectAsState()
+    val context = LocalContext.current
+    val currentUid = Firebase.auth.currentUser?.uid ?: ""
+
+    LaunchedEffect(peerUid) {
+        viewModel.fetchPeerProfile(peerUid)
+        viewModel.checkConnectionStatus(currentUid, peerUid)
+    }
+
+    val currentUserName = Firebase.auth.currentUser?.displayName ?: "Peer"
+    val isLoaded = peerProfile != null
+
+    Scaffold(
+        containerColor = BgDeep
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(BgDeep)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                peerProfile?.let { peer: UserProfile ->
+                    PeerProfileHeader(
+                        peer = peer,
+                        connectionDetails = connectionDetails,
+                        currentUid = currentUid,
+                        onBackClick = { navController.popBackStack() },
+                        onConnectClick = {
+                            viewModel.sendConnectionRequest(currentUid, currentUserName, peerUid)
+                        },
+                        onMessageClick = {
+                            navController.navigate("chat/$peerUid")
+                        },
+                        onAcceptClick = {
+                            viewModel.acceptConnection(currentUid, currentUserName, peerUid)
+                        },
+                        onDeclineClick = {
+                            viewModel.declineConnection(currentUid, peerUid)
+                        }
+                    )
+                }
+
+            Spacer(Modifier.height(24.dp))
+
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // Skills Card
+                AnimatedVisibility(
+                    visible = isLoaded,
+                    enter = fadeIn(tween(400)) + slideInVertically(initialOffsetY = { 50 }, animationSpec = tween(400, delayMillis = 100))
+                ) {
+                    PeerInfoCard(title = "Skills") {
+                        SkillSection(
+                            title = "Skills I Know",
+                            skills = peerProfile?.teachSkills ?: emptyList(),
+                            chipColor = AccentPurple
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        SkillSection(
+                            title = "Wants to Learn",
+                            skills = peerProfile?.learnSkills ?: emptyList(),
+                            chipColor = AccentBlue
+                        )
+                    }
+                }
+
+                // About Card
+                AnimatedVisibility(
+                    visible = isLoaded,
+                    enter = fadeIn(tween(400)) + slideInVertically(initialOffsetY = { 50 }, animationSpec = tween(400, delayMillis = 200))
+                ) {
+                    PeerInfoCard(title = "About") {
+                        Text(
+                            peerProfile?.bio ?: "Not added yet",
+                            fontSize = 14.sp,
+                            color = TextSecondary,
+                            lineHeight = 20.sp
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+                        Spacer(Modifier.height(20.dp))
+                        IconInfoRow(Icons.Rounded.School, "College", peerProfile?.college ?: "Not added")
+                        Spacer(Modifier.height(12.dp))
+                        IconInfoRow(Icons.Rounded.CalendarToday, "Year", peerProfile?.year ?: "Not added")
+                    }
+                }
+
+                // Projects Card
+                AnimatedVisibility(
+                    visible = isLoaded,
+                    enter = fadeIn(tween(400)) + slideInVertically(initialOffsetY = { 50 }, animationSpec = tween(400, delayMillis = 300))
+                ) {
+                    PeerInfoCard(title = "Projects") {
+                        Text("No projects yet", color = TextSecondary, fontSize = 14.sp)
+                    }
+                }
+
+                // Social Card
+                AnimatedVisibility(
+                    visible = isLoaded,
+                    enter = fadeIn(tween(400)) + slideInVertically(initialOffsetY = { 50 }, animationSpec = tween(400, delayMillis = 400))
+                ) {
+                    PeerInfoCard(title = "Social Profiles") {
+                        SocialRow(
+                            icon = Icons.Rounded.Link,
+                            label = "GitHub",
+                            link = peerProfile?.githubLink ?: "",
+                            context = context
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        SocialRow(
+                            icon = Icons.Rounded.Link,
+                            label = "LinkedIn",
+                            link = peerProfile?.linkedinLink ?: "",
+                            context = context
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(40.dp))
+            }
+        }
+    }
+}
+}
+
+@Composable
+fun PeerProfileHeader(
+    peer: UserProfile,
+    connectionDetails: ConnectionDetails,
+    currentUid: String,
+    onBackClick: () -> Unit,
+    onConnectClick: () -> Unit,
+    onMessageClick: () -> Unit,
+    onAcceptClick: () -> Unit,
+    onDeclineClick: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "avatar_pulse")
+    val avatarScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF7C4DFF),
+                        Color(0xFF5C35CC)
+                    )
+                )
+            )
+            .padding(bottom = 24.dp)
+    ) {
+        // Back button
+        IconButton(
+            onClick = onBackClick,
+            modifier = Modifier
+                .padding(
+                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
+                    start = 8.dp
+                )
+                .align(Alignment.TopStart)
+        ) {
+            Icon(
+                Icons.AutoMirrored.Rounded.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.White
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Avatar circle
+            Box(
+                modifier = Modifier
+                    .size(90.dp)
+                    .scale(avatarScale)
+                    .border(2.dp, Color.White.copy(alpha = 0.5f), CircleShape)
+                    .padding(4.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = peer.name.firstOrNull()?.uppercase() ?: "?",
+                    color = Color.White,
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Name
+            Text(
+                text = peer.name,
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            // College • Year
+            Text(
+                text = "${peer.college} • ${peer.year}",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 14.sp
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            // Stats row
+            Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 40.dp)
+            ) {
+                StatItem("Know", peer.teachSkills.size)
+                StatItem("Learn", peer.learnSkills.size)
+                StatItem("Peers", 0)
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // Connection button
+            val interactionSource = remember { MutableInteractionSource() }
+            val isPressed by interactionSource.collectIsPressedAsState()
+            val buttonScale by animateFloatAsState(
+                targetValue = if (isPressed) 0.95f else 1f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                label = "button_press"
+            )
+
+                when (connectionDetails.status) {
+                    ConnectionStatus.NOT_CONNECTED -> {
+                        Button(
+                            onClick = onConnectClick,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = Color(0xFF7C4DFF)
+                            ),
+                            shape = RoundedCornerShape(24.dp),
+                            modifier = Modifier
+                                .padding(horizontal = 32.dp)
+                                .fillMaxWidth()
+                        ) {
+                            Text(
+                                "Connect 🤝",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    ConnectionStatus.PENDING -> {
+                        if (connectionDetails.requestedBy == currentUid) {
+                            OutlinedButton(
+                                onClick = {},
+                                enabled = false,
+                                border = BorderStroke(
+                                    1.dp,
+                                    Color.White.copy(alpha = 0.5f)
+                                ),
+                                modifier = Modifier
+                                    .padding(horizontal = 32.dp)
+                                    .fillMaxWidth()
+                            ) {
+                                Text(
+                                    "Request Sent ⏳",
+                                    color = Color.White.copy(alpha = 0.7f)
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .padding(horizontal = 32.dp)
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = onAcceptClick,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color.White
+                                    ),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        "Accept",
+                                        color = Color(0xFF7C4DFF),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                OutlinedButton(
+                                    onClick = onDeclineClick,
+                                    border = BorderStroke(
+                                        1.dp, Color.White.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        "Decline",
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    ConnectionStatus.CONNECTED -> {
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 32.dp)
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {},
+                                border = BorderStroke(
+                                    1.dp, Color(0xFF4CAF50)
+                                ),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    "Connected ✓",
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
+                            Button(
+                                onClick = onMessageClick,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White
+                                ),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    "Message 💬",
+                                    color = Color(0xFF7C4DFF)
+                                )
+                            }
+                        }
+                    }
+                }
+        }
+    }
+}
+
+@Composable
+fun StatItem(label: String, count: Int) {
+    var targetCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(count) { targetCount = count }
+    val animatedCount by animateIntAsState(
+        targetValue = targetCount,
+        animationSpec = tween(800, easing = EaseOutCubic),
+        label = "count"
+    )
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(animatedCount.toString(), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(label, fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+    }
+}
+
+@Composable
+fun PeerInfoCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(BgCard)
+            .padding(20.dp)
+    ) {
+        Text(
+            title,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        content()
+    }
+}
+
+@Composable
+fun SkillSection(title: String, skills: List<String>, chipColor: Color) {
+    Column {
+        Text(title, fontSize = 13.sp, color = TextSecondary.copy(alpha = 0.8f), fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(10.dp))
+        if (skills.isEmpty()) {
+            Text("No skills added", fontSize = 12.sp, color = Color.Gray.copy(alpha = 0.5f))
+        } else {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                skills.forEach { skill ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        chipColor.copy(alpha = 0.15f),
+                                        chipColor.copy(alpha = 0.05f)
+                                    )
+                                )
+                            )
+                            .border(
+                                1.dp,
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        chipColor.copy(alpha = 0.5f),
+                                        Color.Transparent
+                                    )
+                                ),
+                                RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = skill,
+                            fontSize = 12.sp,
+                            color = chipColor,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.graphicsLayer {
+                                shadowElevation = 4.dp.toPx()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun IconInfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier.size(32.dp).clip(CircleShape).background(AccentCyan.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+        }
+        Spacer(Modifier.width(16.dp))
+        Column {
+            Text(label, fontSize = 11.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
+            Text(text, fontSize = 14.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+fun SocialRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    link: String,
+    context: android.content.Context
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = link.isNotEmpty()) {
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link))
+                    context.startActivity(intent)
+                } catch (e: Exception) {}
+            },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(
+            if (link.isEmpty()) "$label: Not added" else label,
+            fontSize = 14.sp,
+            color = if (link.isEmpty()) Color.Gray else TextPrimary
+        )
+        if (link.isNotEmpty()) {
+            Spacer(Modifier.weight(1f))
+            Icon(Icons.Rounded.OpenInNew, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+        }
+    }
+}
