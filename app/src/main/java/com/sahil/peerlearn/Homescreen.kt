@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sahil.peerlearn.ui.theme.*
 import com.google.firebase.auth.FirebaseUser
 import java.util.Calendar
 
@@ -60,7 +61,7 @@ fun HomeScreen(
     }
 
     Scaffold(
-        containerColor = Color(0xFF121212),
+        containerColor = SpaceBlack,
         modifier = Modifier.fillMaxSize(),
         topBar = {
             HomeTopBar(
@@ -73,8 +74,23 @@ fun HomeScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF121212))
+                .background(SpaceBlack)
         ) {
+            // Purple glow at top center
+            Box(
+                modifier = Modifier
+                    .size(450.dp, 300.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                PurpleGlow.copy(alpha = 0.35f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -272,7 +288,7 @@ fun GreetingCard(user: UserProfile, onProfileClick: () -> Unit) {
                 .fillMaxWidth()
                 .background(
                     Brush.linearGradient(
-                        colors = listOf(Color(0xFF7C4DFF), Color(0xFF5C35CC))
+                        colors = listOf(PurpleGlow, PurpleAccent)
                     )
                 )
                 .padding(24.dp)
@@ -340,7 +356,7 @@ fun HomeSearchBar(onClick: () -> Unit) {
                 .height(48.dp)
                 .clickable { onClick() },
             shape = RoundedCornerShape(24.dp),
-            color = Color(0xFF1E1E1E),
+            color = SpaceSurface,
             border = BorderStroke(1.dp, Color(0xFF2A2A3D))
         ) {
             Row(
@@ -352,7 +368,7 @@ fun HomeSearchBar(onClick: () -> Unit) {
                 Icon(
                     Icons.Rounded.Search,
                     contentDescription = null,
-                    tint = Color(0xFF7C4DFF),
+                    tint = PurpleAccent,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(12.dp))
@@ -370,7 +386,7 @@ fun HomeSearchBar(onClick: () -> Unit) {
             onClick = { Toast.makeText(context, "Filters coming soon!", Toast.LENGTH_SHORT).show() },
             modifier = Modifier
                 .size(48.dp)
-                .background(Color(0xFF7C4DFF), CircleShape)
+                .background(PurpleAccent, CircleShape)
         ) {
             Icon(
                 Icons.Rounded.FilterList,
@@ -399,7 +415,7 @@ fun SectionHeader(title: String, onSeeAllClick: () -> Unit) {
         )
         Text(
             text = "See all →",
-            color = Color(0xFF7C4DFF),
+            color = PurpleAccent,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.clickable { onSeeAllClick() }
@@ -411,9 +427,9 @@ fun SectionHeader(title: String, onSeeAllClick: () -> Unit) {
 fun RecommendedEmptyState(onUpdateProfile: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+        colors = CardDefaults.cardColors(containerColor = SpaceSurface),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, Color(0xFF7C4DFF).copy(alpha = 0.5f))
+        border = BorderStroke(1.dp, PurpleAccent.copy(alpha = 0.5f))
     ) {
         Column(
             modifier = Modifier.padding(24.dp),
@@ -428,7 +444,7 @@ fun RecommendedEmptyState(onUpdateProfile: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             Button(
                 onClick = onUpdateProfile,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
+                colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text("Update Profile", color = Color.White)
@@ -442,7 +458,7 @@ fun RecommendedEmptyState(onUpdateProfile: () -> Unit) {
 fun EmptyStateCard(message: String, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+        colors = CardDefaults.cardColors(containerColor = SpaceSurface),
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, Color(0xFF2A2A3D))
     ) {
@@ -476,9 +492,9 @@ fun ShimmerPeerCard(isVertical: Boolean) {
     )
 
     val shimmerColors = listOf(
-        Color(0xFF1E1E1E),
-        Color(0xFF2A2A3D),
-        Color(0xFF1E1E1E)
+        SpaceBlack,
+        SpaceSurface,
+        SpaceBlack
     )
 
     val brush = Brush.linearGradient(

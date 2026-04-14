@@ -3,6 +3,7 @@ package com.sahil.peerlearn
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import com.sahil.peerlearn.ui.theme.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -44,12 +45,24 @@ fun ProfileScreen(
     }
 
     Scaffold(
-        containerColor = Color(0xFF121212)
+        containerColor = SpaceBlack
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
+            // Radial Glow Effect
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .size(450.dp, 300.dp)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(PurpleGlow.copy(alpha = 0.35f), Color.Transparent)
+                        )
+                    )
+            )
+
             when (uiState) {
                 is ProfileUiState.Loading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = Color(0xFF7C4DFF))
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = PurpleAccent)
                 }
                 is ProfileUiState.Error -> {
                     Column(
@@ -57,7 +70,7 @@ fun ProfileScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text((uiState as ProfileUiState.Error).message, color = Color.Red)
-                        Button(onClick = { viewModel.fetchProfile(uid) }) { Text("Retry") }
+                        Button(onClick = { viewModel.fetchProfile(uid) }, colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent)) { Text("Retry") }
                     }
                 }
                 else -> {
@@ -74,8 +87,8 @@ fun ProfileScreen(
                                     .background(
                                         brush = Brush.verticalGradient(
                                             colors = listOf(
-                                                Color(0xFF7C4DFF),
-                                                Color(0xFF5C35CC)
+                                                PurpleGlow.copy(alpha = 0.7f),
+                                                SpaceBlack.copy(alpha = 0f)
                                             )
                                         )
                                     )
@@ -118,8 +131,8 @@ fun ProfileScreen(
                                         modifier = Modifier
                                             .size(80.dp)
                                             .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.2f))
-                                            .border(2.dp, Color.White, CircleShape),
+                                            .background(Color.White.copy(alpha = 0.1f))
+                                            .border(2.dp, PurpleAccent, CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
@@ -131,7 +144,7 @@ fun ProfileScreen(
                                     }
                                     Spacer(Modifier.height(12.dp))
                                     Text(user.name, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                    Text("${user.college} • ${user.year}", fontSize = 14.sp, color = Color.LightGray)
+                                    Text("${user.college} • ${user.year}", fontSize = 14.sp, color = Color.White.copy(alpha = 0.7f))
 
                                     Spacer(Modifier.height(20.dp))
                                     
@@ -154,9 +167,9 @@ fun ProfileScreen(
                                         Text("I Can Teach:", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                         Spacer(Modifier.height(8.dp))
                                         if (user.teachSkills.isEmpty()) {
-                                            Text("Add your skills", color = Color(0xFF9E9E9E), fontSize = 13.sp)
+                                            Text("Add your skills", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
                                         } else {
-                                            SkillFlowRow(user.teachSkills, Color(0xFF7C4DFF))
+                                            SkillFlowRow(user.teachSkills, PurpleAccent)
                                         }
                                         
                                         Spacer(Modifier.height(16.dp))
@@ -164,9 +177,9 @@ fun ProfileScreen(
                                         Text("Want to Learn:", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                         Spacer(Modifier.height(8.dp))
                                         if (user.learnSkills.isEmpty()) {
-                                            Text("Add your skills", color = Color(0xFF9E9E9E), fontSize = 13.sp)
+                                            Text("Add your skills", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
                                         } else {
-                                            SkillFlowRow(user.learnSkills, Color(0xFF2196F3))
+                                            SkillFlowRow(user.learnSkills, PurpleGlow)
                                         }
                                     }
                                 }
@@ -175,24 +188,24 @@ fun ProfileScreen(
                                 ProfileCard(title = "Achievements", icon = Icons.Rounded.EmojiEvents) {
                                     Column {
                                         Text("No achievements yet", color = Color.White, fontSize = 14.sp)
-                                        Text("Complete tasks to earn badges!", color = Color(0xFF9E9E9E), fontSize = 13.sp)
+                                        Text("Complete tasks to earn badges!", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
                                     }
                                 }
 
                                 // SECTION 4 — PROJECTS CARD
                                 ProfileCard(title = "Projects", icon = Icons.Rounded.Folder) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("No projects added yet", color = Color(0xFF9E9E9E), fontSize = 14.sp, modifier = Modifier.fillMaxWidth())
+                                        Text("No projects added yet", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp, modifier = Modifier.fillMaxWidth())
                                         Spacer(Modifier.height(12.dp))
                                         OutlinedButton(
                                             onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() },
                                             modifier = Modifier.fillMaxWidth(),
                                             shape = RoundedCornerShape(8.dp),
-                                            border = BorderStroke(1.dp, Color(0xFF7C4DFF))
+                                            border = BorderStroke(1.dp, PurpleAccent)
                                         ) {
-                                            Icon(Icons.Rounded.Add, null, tint = Color(0xFF7C4DFF))
+                                            Icon(Icons.Rounded.Add, null, tint = PurpleAccent)
                                             Spacer(Modifier.width(8.dp))
-                                            Text("Add Project", color = Color(0xFF7C4DFF))
+                                            Text("Add Project", color = PurpleAccent)
                                         }
                                     }
                                 }
@@ -223,7 +236,7 @@ fun ProfileScreen(
                                         InfoRow(Icons.Rounded.Email, "Email", user.email)
                                         Spacer(Modifier.height(4.dp))
                                         Text("Bio:", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                        Text(user.bio.ifBlank { "Tell about yourself..." }, color = Color(0xFF9E9E9E), fontSize = 14.sp, lineHeight = 20.sp)
+                                        Text(user.bio.ifBlank { "Tell about yourself..." }, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, lineHeight = 20.sp)
                                     }
                                 }
 
@@ -261,12 +274,13 @@ fun StatItem(label: String, count: String) {
 fun ProfileCard(title: String, icon: ImageVector, content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
-        shape = RoundedCornerShape(16.dp)
+        colors = CardDefaults.cardColors(containerColor = SpaceSurface.copy(alpha = 0.7f)),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, PurpleAccent.copy(alpha = 0.1f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, null, tint = Color(0xFF7C4DFF), modifier = Modifier.size(20.dp))
+                Icon(icon, null, tint = PurpleAccent, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(12.dp))
                 Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
@@ -310,7 +324,7 @@ fun SocialRow(platform: String, link: String, onClick: () -> Unit) {
         Text(platform, color = Color.White, fontSize = 14.sp)
         Text(
             text = link.ifBlank { "Not added" },
-            color = if (link.isBlank()) Color(0xFF9E9E9E) else Color(0xFF7C4DFF),
+            color = if (link.isBlank()) Color.White.copy(alpha = 0.5f) else PurpleAccent,
             fontSize = 14.sp,
             maxLines = 1
         )
@@ -320,9 +334,9 @@ fun SocialRow(platform: String, link: String, onClick: () -> Unit) {
 @Composable
 fun InfoRow(icon: ImageVector, label: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = Color(0xFF9E9E9E), modifier = Modifier.size(18.dp))
+        Icon(icon, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(12.dp))
-        Text("$label: ", color = Color(0xFF9E9E9E), fontSize = 14.sp)
+        Text("$label: ", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
         Text(value, color = Color.White, fontSize = 14.sp)
     }
 }

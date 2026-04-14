@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.sahil.peerlearn.ui.theme.*
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import java.text.SimpleDateFormat
@@ -53,7 +54,9 @@ fun ChatScreen(
     viewModel: ChatViewModel = viewModel()
 ) {
     val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
-    val chatId = listOf(currentUid, peerUid).sorted().joinToString("_")
+    val chatId = remember(currentUid, peerUid) {
+        listOf(currentUid, peerUid).sorted().joinToString("_")
+    }
 
     var messageText by remember { mutableStateOf("") }
     var showCodeDialog by remember { mutableStateOf(false) }
@@ -76,7 +79,16 @@ fun ChatScreen(
     var showMessageOptions by remember { mutableStateOf(false) }
 
     val showScrollButton by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 2 }
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val visibleItemsInfo = layoutInfo.visibleItemsInfo
+            if (visibleItemsInfo.isEmpty()) {
+                false
+            } else {
+                val lastVisibleItem = visibleItemsInfo.last()
+                lastVisibleItem.index < layoutInfo.totalItemsCount - 3
+            }
+        }
     }
 
     val keyboardState by rememberUpdatedState(WindowInsets.isImeVisible)
@@ -84,7 +96,10 @@ fun ChatScreen(
     LaunchedEffect(keyboardState) {
         if (keyboardState && messages.isNotEmpty()) {
             delay(100)
-            listState.animateScrollToItem(messages.size - 1)
+            val totalItems = listState.layoutInfo.totalItemsCount
+            if (totalItems > 0) {
+                listState.animateScrollToItem(totalItems - 1)
+            }
         }
     }
 
@@ -97,12 +112,15 @@ fun ChatScreen(
     LaunchedEffect(isPeerTyping) {
         if (isPeerTyping) {
             delay(100)
-            listState.animateScrollToItem(messages.size)
+            val totalItems = listState.layoutInfo.totalItemsCount
+            if (totalItems > 0) {
+                listState.animateScrollToItem(totalItems - 1)
+            }
         }
     }
 
     LaunchedEffect(chatId) {
-        viewModel.loadMessages(chatId, currentUid)
+        viewModel.loadMessages(chatId)
         viewModel.observeTyping(chatId, peerUid)
         viewModel.markMessagesAsRead(chatId, currentUid)
         viewModel.loadPeerProfile(peerUid)
@@ -110,9 +128,24 @@ fun ChatScreen(
 
     val avatarColor = remember(peerProfile?.name) { getAvatarColorFromChat(peerProfile?.name ?: "") }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF212121))) {
+    Box(modifier = Modifier.fillMaxSize().background(SpaceBlack)) {
+        // Standard Space Theme Glow
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .size(450.dp, 300.dp)
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors = listOf(
+                            PurpleGlow.copy(alpha = 0.35f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
         Canvas(Modifier.fillMaxSize()) {
-            val patternColor = Color(0xFF252525)
+            val patternColor = Color(0xFF252525).copy(alpha = 0.5f)
             for (x in 0..size.width.toInt() step 60) {
                 for (y in 0..size.height.toInt() step 60) {
                     drawCircle(color = patternColor, radius = 1.5f, center = Offset(x.toFloat(), y.toFloat()))
@@ -123,13 +156,12 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF121212))
                 .imePadding()
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF1C1C1C))
+                    .background(SpaceSurface.copy(alpha = 0.9f))
                     .statusBarsPadding()
                     .padding(4.dp, 8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -168,8 +200,35 @@ fun ChatScreen(
                     )
                     if (isPeerTyping) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("typing", color = Color(0xFF4DCA5D), fontSize = 12.sp, fontStyle = FontStyle.Italic)
-                            TypingDotsSmall()
+                            Text(
+                                "typing",
+                                color = Color(0xFF4DCA5D),
+                                fontSize = 12.sp,
+                                fontStyle = FontStyle.Italic
+                            )
+                            Row(
+                                modifier = Modifier.padding(start = 2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                val infiniteTransition = rememberInfiniteTransition(label = "typing")
+                                listOf(0, 200, 400).forEach { delay ->
+                                    val alpha by infiniteTransition.animateFloat(
+                                        initialValue = 0.2f,
+                                        targetValue = 1f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(600, delay),
+                                            repeatMode = RepeatMode.Reverse
+                                        ),
+                                        label = "alpha"
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(3.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF4DCA5D).copy(alpha = alpha))
+                                    )
+                                }
+                            }
                         }
                     } else {
                         Text("online", color = Color(0xFF4DCA5D), fontSize = 12.sp)
@@ -178,7 +237,7 @@ fun ChatScreen(
                 IconButton(onClick = {
                     Toast.makeText(context, "Voice call coming soon!", Toast.LENGTH_SHORT).show()
                 }) {
-                    Icon(Icons.Default.Call, tint = Color(0xFF5B9BD5), modifier = Modifier.size(22.dp), contentDescription = "Call")
+                    Icon(Icons.Default.Call, tint = PurpleAccent, modifier = Modifier.size(22.dp), contentDescription = "Call")
                 }
                 Box {
                     IconButton(onClick = { showMoreMenu = true }) {
@@ -187,7 +246,7 @@ fun ChatScreen(
                     DropdownMenu(
                         expanded = showMoreMenu,
                         onDismissRequest = { showMoreMenu = false },
-                        modifier = Modifier.background(Color(0xFF2A2A2A))
+                        modifier = Modifier.background(SpaceSurface)
                     ) {
                         listOf(
                             "View Profile" to { navController.navigate("peer_profile/$peerUid") },
@@ -207,36 +266,75 @@ fun ChatScreen(
                 }
             }
 
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
             ) {
-                messages.groupBy { formatDate(it.timestamp) }.forEach { (date, msgs) ->
-                    item { DateSeparator(date) }
-                    items(msgs) { msg ->
-                        val isMe = msg.senderId == currentUid
-                        MessageRow(
-                            msg = msg,
-                            isMe = isMe,
-                            avatarColor = avatarColor,
-                            peerName = peerProfile?.name ?: "",
-                            screenWidth = screenWidth,
-                            onLongPress = {
-                                selectedMessage = msg
-                                showMessageOptions = true
-                            }
-                        )
-                        Spacer(Modifier.height(4.dp))
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 8.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp)
+                ) {
+                    messages.groupBy { formatDate(it.timestamp) }.forEach { (date, msgs) ->
+                        item { DateSeparator(date) }
+                        items(msgs) { msg ->
+                            val isMe = msg.senderId == currentUid
+                            MessageRow(
+                                msg = msg,
+                                isMe = isMe,
+                                avatarColor = avatarColor,
+                                peerName = peerProfile?.name ?: "",
+                                screenWidth = screenWidth,
+                                onLongPress = {
+                                    selectedMessage = msg
+                                    showMessageOptions = true
+                                }
+                            )
+                            Spacer(Modifier.height(4.dp))
+                        }
+                    }
+                    item {
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = isPeerTyping,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            TypingIndicator(avatarColor, peerProfile?.name ?: "")
+                        }
                     }
                 }
-                item {
-                    AnimatedVisibility(
-                        visible = isPeerTyping,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically()
+
+                // Scroll-to-bottom Floating Action Button
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showScrollButton,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 16.dp, end = 16.dp),
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    FloatingActionButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                val totalItems = listState.layoutInfo.totalItemsCount
+                                if (totalItems > 0) {
+                                    listState.animateScrollToItem(totalItems - 1)
+                                }
+                            }
+                        },
+                        containerColor = PurpleAccent,
+                        shape = CircleShape,
+                        modifier = Modifier.size(44.dp),
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
                     ) {
-                        TypingIndicator(avatarColor, peerProfile?.name ?: "")
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Scroll to bottom",
+                            tint = Color.White
+                        )
                     }
                 }
             }
@@ -248,7 +346,7 @@ fun ChatScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF1C1C1C))
+                    .background(SpaceSurface)
                     .padding(8.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
@@ -260,7 +358,7 @@ fun ChatScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .background(Color(0xFF2C2C2C), RoundedCornerShape(24.dp))
+                        .background(SpaceBlack, RoundedCornerShape(24.dp))
                         .padding(horizontal = 4.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -292,7 +390,7 @@ fun ChatScreen(
                     modifier = Modifier
                         .size(46.dp)
                         .background(
-                            if (messageText.isNotEmpty()) Color(0xFF5B9BD5) else Color(0xFF2C2C2C),
+                            if (messageText.isNotEmpty()) PurpleAccent else SpaceBlack,
                             CircleShape
                         )
                         .clickable {
@@ -318,30 +416,12 @@ fun ChatScreen(
                 }
             }
         }
-
-        AnimatedVisibility(
-            visible = showScrollButton,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 80.dp)
-        ) {
-            FloatingActionButton(
-                onClick = {
-                    coroutineScope.launch {
-                        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
-                    }
-                },
-                containerColor = Color(0xFF5B9BD5),
-                shape = CircleShape,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color.White)
-            }
-        }
     }
 
     if (showMessageOptions && selectedMessage != null) {
         AlertDialog(
             onDismissRequest = { showMessageOptions = false },
-            containerColor = Color(0xFF1C1C1C),
+            containerColor = SpaceSurface,
             text = {
                 Column {
                     val options = listOf(
@@ -367,7 +447,7 @@ fun ChatScreen(
     if (showCodeDialog) {
         AlertDialog(
             onDismissRequest = { showCodeDialog = false },
-            containerColor = Color(0xFF1C1C1C),
+            containerColor = SpaceSurface,
             title = { Text("Share Code 💻", color = Color.White) },
             text = {
                 Column {
@@ -383,7 +463,7 @@ fun ChatScreen(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFF5B9BD5)
+                                focusedBorderColor = PurpleAccent
                             )
                         )
                         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -400,7 +480,7 @@ fun ChatScreen(
                         placeholder = { Text("Paste code here...", color = Color.Gray) },
                         textStyle = TextStyle(fontFamily = FontFamily.Monospace, color = Color(0xFF00FF88)),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF5B9BD5)
+                            focusedBorderColor = PurpleAccent
                         )
                     )
                 }
@@ -413,7 +493,7 @@ fun ChatScreen(
                             codeText = ""; showCodeDialog = false
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5B9BD5))
+                    colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent)
                 ) { Text("Send 🚀") }
             }
         )
@@ -448,9 +528,9 @@ fun MessageRow(msg: Message, isMe: Boolean, avatarColor: Color, peerName: String
                         bottomEnd = 16.dp
                     )
                 )
-                .background(if (isMe) Color(0xFF2B5278) else Color(0xFF212121))
+                .background(if (isMe) PurpleGlow.copy(alpha = 0.8f) else SpaceSurface)
                 .let { 
-                    if (!isMe) it.border(1.dp, Color(0xFF2A2A2A), RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp))
+                    if (!isMe) it.border(1.dp, Color(0xFF2A2A3D), RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp))
                     else it
                 }
                 .pointerInput(msg.id) { detectTapGestures(onLongPress = { onLongPress() }) }
@@ -461,17 +541,17 @@ fun MessageRow(msg: Message, isMe: Boolean, avatarColor: Color, peerName: String
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(if (isMe) Color(0xFF1A3A5C) else Color(0xFF1C1C1C), RoundedCornerShape(6.dp))
+                            .background(if (isMe) SpaceBlack.copy(0.4f) else SpaceBlack, RoundedCornerShape(6.dp))
                             .padding(8.dp)
                     ) {
-                        Text(msg.replyToText.take(60), color = Color(0xFF7EB5F5), fontSize = 12.sp, maxLines = 2)
+                        Text(msg.replyToText.take(60), color = PurpleAccent, fontSize = 12.sp, maxLines = 2)
                     }
                     Spacer(Modifier.height(4.dp))
                 }
                 
                 if (msg.type == "code") {
                     Box(modifier = Modifier.background(Color.Black.copy(0.3f), RoundedCornerShape(4.dp)).padding(4.dp)) {
-                        Text(msg.language.uppercase(), color = Color(0xFF5B9BD5), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(msg.language.uppercase(), color = PurpleAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                     Text(msg.message, color = Color(0xFF00FF88), fontFamily = FontFamily.Monospace, fontSize = 14.sp)
                 } else {
@@ -488,7 +568,7 @@ fun MessageRow(msg: Message, isMe: Boolean, avatarColor: Color, peerName: String
                                 msg.isRead -> Icons.Default.DoneAll
                                 else -> Icons.Default.Done
                             },
-                            tint = if (msg.isRead) Color(0xFF5B9BD5) else Color.White.copy(0.6f),
+                            tint = if (msg.isRead) PurpleAccent else Color.White.copy(0.6f),
                             modifier = Modifier.size(14.dp),
                             contentDescription = null
                         )
@@ -539,7 +619,7 @@ fun TypingIndicator(avatarColor: Color, peerName: String) {
         Spacer(Modifier.width(6.dp))
         Box(
             modifier = Modifier.background(
-                Color(0xFF2A2A2A),
+                SpaceSurface,
                 RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
             ).padding(14.dp, 12.dp)
         ) {
@@ -559,11 +639,11 @@ fun TypingIndicator(avatarColor: Color, peerName: String) {
 
 @Composable
 fun ReplyPreview(msg: Message, onCancel: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1C)).padding(12.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.width(2.dp).height(36.dp).background(Color(0xFF5B9BD5)))
+    Row(modifier = Modifier.fillMaxWidth().background(SpaceSurface).padding(12.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.width(2.dp).height(36.dp).background(PurpleAccent))
         Spacer(Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text("Reply", color = Color(0xFF5B9BD5), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("Reply", color = PurpleAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Text(msg.message.take(50), color = Color(0xFF9E9E9E), fontSize = 12.sp, maxLines = 1)
         }
         IconButton(onClick = onCancel) { Icon(Icons.Default.Close, tint = Color(0xFF9E9E9E), modifier = Modifier.size(18.dp), contentDescription = null) }

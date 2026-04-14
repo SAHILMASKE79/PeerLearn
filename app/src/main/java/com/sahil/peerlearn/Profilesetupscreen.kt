@@ -88,34 +88,22 @@ fun ProfileSetupScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BgDeep)
+            .background(SpaceBlack)
     ) {
-        // PERFORMANCE OPTIMIZATION: Disabled Canvas blobs for emulator stability
-        /*
-        Canvas(Modifier.fillMaxSize()) {
-            drawCircle(
-                brush = Brush.radialGradient(
-                    listOf(AccentPurple.copy(alpha = 0.18f), Color.Transparent),
-                    center = Offset(size.width * 0.15f + blob1X, size.height * 0.2f),
-                    radius = size.width * 0.55f
+        // Radial Glow
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .size(450.dp, 300.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            PurpleGlow.copy(alpha = 0.35f),
+                            Color.Transparent
+                        )
+                    )
                 )
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    listOf(AccentBlue.copy(alpha = 0.15f), Color.Transparent),
-                    center = Offset(size.width * 0.85f, size.height * 0.65f + blob2Y),
-                    radius = size.width * 0.5f
-                )
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    listOf(AccentCyan.copy(alpha = 0.10f), Color.Transparent),
-                    center = Offset(size.width * 0.5f, size.height * 0.9f),
-                    radius = size.width * 0.4f
-                )
-            )
-        }
-        */
+        )
 
         Column(
             modifier = Modifier
@@ -128,7 +116,7 @@ fun ProfileSetupScreen(
                 "PEERLEARN",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.W700,
-                color = AccentCyan,
+                color = PurpleAccent,
                 letterSpacing = 4.sp
             )
             Spacer(Modifier.height(6.dp))
@@ -184,13 +172,13 @@ fun ProfileSetupScreen(
                         title = "🎓  Skills You Can Teach",
                         subtitle = "Topics you're confident explaining to others",
                         selected = teachSkills,
-                        accentColor = AccentCyan
+                        accentColor = PurpleAccent
                     )
                     2 -> StepSkillPicker(
                         title = "📚  Skills You Want to Learn",
                         subtitle = "What are you looking for help with?",
                         selected = learnSkills,
-                        accentColor = AccentPurple
+                        accentColor = PurpleGlow
                     )
                 }
             }
@@ -205,7 +193,7 @@ fun ProfileSetupScreen(
                     OutlinedButton(
                         onClick = { currentStep-- },
                         modifier = Modifier.weight(1f).height(54.dp),
-                        border = BorderStroke(1.dp, GlassStroke),
+                        border = BorderStroke(1.dp, PurpleGlow.copy(alpha = 0.3f)),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary)
                     ) {
@@ -251,7 +239,7 @@ fun ProfileSetupScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
-                                Brush.linearGradient(listOf(AccentBlue, AccentPurple)),
+                                Brush.linearGradient(listOf(PurpleGlow, PurpleAccent)),
                                 RoundedCornerShape(14.dp)
                             ),
                         contentAlignment = Alignment.Center
@@ -294,9 +282,9 @@ fun StepIndicator(currentStep: Int, totalSteps: Int) {
             val isDone   = index < currentStep
             val width by animateDpAsState(if (isActive) 36.dp else 10.dp, label = "dot")
             val color = when {
-                isDone   -> AccentCyan
-                isActive -> AccentBlue
-                else     -> GlassStroke
+                isDone   -> PurpleAccent
+                isActive -> PurpleGlow
+                else     -> SpaceSurface
             }
             Box(Modifier.height(10.dp).width(width).clip(CircleShape).background(color))
         }
@@ -335,7 +323,7 @@ fun StepBasicInfo(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     yearOptions.forEach { year ->
-                        PeerChip(label = year, selected = selectedYear == year, accentColor = AccentBlue) {
+                        PeerChip(label = year, selected = selectedYear == year, accentColor = PurpleAccent) {
                             onYearSelect(year)
                         }
                     }
@@ -419,15 +407,15 @@ fun GlassCard(content: @Composable () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, GlassStroke, RoundedCornerShape(16.dp))
-            .background(BgCard.copy(alpha = 0.70f), RoundedCornerShape(16.dp))
+            .border(1.dp, PurpleGlow.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
+            .background(SpaceSurface.copy(alpha = 0.70f), RoundedCornerShape(16.dp))
     ) { content() }
 }
 
 @Composable
 fun PeerChip(label: String, selected: Boolean, accentColor: Color, onClick: () -> Unit) {
-    val bgColor     by animateColorAsState(if (selected) accentColor.copy(0.20f) else Color(0xFF1E1E2E), label = "bg")
-    val borderColor by animateColorAsState(if (selected) accentColor else GlassStroke, label = "border")
+    val bgColor     by animateColorAsState(if (selected) accentColor.copy(0.20f) else SpaceSurface, label = "bg")
+    val borderColor by animateColorAsState(if (selected) accentColor else PurpleGlow.copy(alpha = 0.2f), label = "border")
     val textColor   by animateColorAsState(if (selected) accentColor else TextSecondary, label = "text")
 
     Box(
@@ -458,20 +446,20 @@ fun GlassTextField(
         onValueChange = onValueChange,
         placeholder = { Text(placeholder, color = TextSecondary, fontSize = 14.sp) },
         leadingIcon = {
-            Icon(icon, contentDescription = null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = null, tint = PurpleAccent, modifier = Modifier.size(20.dp))
         },
         singleLine = singleLine,
         minLines = minLines,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor   = BgCard.copy(alpha = 0.8f),
-            unfocusedContainerColor = BgCard.copy(alpha = 0.6f),
-            focusedBorderColor      = AccentBlue.copy(alpha = 0.7f),
-            unfocusedBorderColor    = GlassStroke,
-            focusedTextColor        = TextPrimary,
-            unfocusedTextColor      = TextPrimary,
-            cursorColor             = AccentCyan
+            focusedContainerColor   = SpaceSurface.copy(alpha = 0.8f),
+            unfocusedContainerColor = SpaceSurface.copy(alpha = 0.6f),
+            focusedBorderColor      = PurpleAccent.copy(alpha = 0.7f),
+            unfocusedBorderColor    = PurpleGlow.copy(alpha = 0.3f),
+            focusedTextColor        = Color.White,
+            unfocusedTextColor      = Color.White,
+            cursorColor             = PurpleAccent
         ),
         modifier = Modifier.fillMaxWidth()
     )

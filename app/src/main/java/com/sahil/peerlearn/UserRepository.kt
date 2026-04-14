@@ -400,6 +400,8 @@ class UserRepository {
         body: String
     ) = withContext(Dispatchers.IO) {
         try {
+            android.util.Log.d("OneSignal", "Sending to: $toOneSignalId")
+            
             val client = OkHttpClient()
             val json = JSONObject().apply {
                 put("app_id", "74ed12e3-94a3-48bc-b54e-41651cc735cc")
@@ -416,8 +418,14 @@ class UserRepository {
                 .build()
 
             client.newCall(request).execute().use { response ->
+                val responseCode = response.code
+                val responseBody = response.body?.string() ?: ""
+                
+                android.util.Log.d("OneSignal", "Response: $responseCode")
+                android.util.Log.d("OneSignal", "Body: $responseBody")
+
                 if (!response.isSuccessful) {
-                    android.util.Log.e("OneSignal", "Failed: ${response.body?.string()}")
+                    android.util.Log.e("OneSignal", "Failed: $responseBody")
                 }
             }
         } catch (e: Exception) {

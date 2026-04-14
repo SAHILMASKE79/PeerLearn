@@ -59,8 +59,20 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BgDeep)
+            .background(SpaceBlack)
     ) {
+        // Radial Glow Effect
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .size(450.dp, 300.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(PurpleGlow.copy(alpha = 0.35f), Color.Transparent)
+                    )
+                )
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -75,17 +87,17 @@ fun LoginScreen(
                     .size(72.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(
-                        Brush.linearGradient(listOf(AccentBlue, AccentPurple))
+                        Brush.linearGradient(listOf(PurpleGlow, PurpleAccent))
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.People, null, tint = TextPrimary, modifier = Modifier.size(32.dp))
+                Icon(Icons.Rounded.People, null, tint = Color.White, modifier = Modifier.size(32.dp))
             }
 
             Spacer(Modifier.height(20.dp))
 
-            Text("PeerLearn", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            Text("Learn together. Grow together.", color = TextSecondary)
+            Text("PeerLearn", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("Learn together. Grow together.", color = Color.White.copy(alpha = 0.7f))
 
             Spacer(Modifier.height(40.dp))
             
@@ -93,8 +105,8 @@ fun LoginScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, GlassStroke, RoundedCornerShape(24.dp))
-                    .background(BgCard.copy(0.75f), RoundedCornerShape(24.dp))
+                    .border(1.dp, PurpleAccent.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
+                    .background(SpaceSurface.copy(0.8f), RoundedCornerShape(24.dp))
                     .padding(24.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -102,7 +114,7 @@ fun LoginScreen(
                         if (isLoginMode) "Welcome Back 👋" else "Create Account ✨",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
+                        color = Color.White
                     )
 
                     if (!isLoginMode) {
@@ -125,10 +137,10 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        placeholder = { Text("Password", color = TextSecondary, fontSize = 14.sp) },
+                        placeholder = { Text("Password", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp) },
                         leadingIcon = {
                             Icon(Icons.Rounded.Lock, contentDescription = null,
-                                tint = AccentBlue, modifier = Modifier.size(20.dp))
+                                tint = PurpleAccent, modifier = Modifier.size(20.dp))
                         },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -136,7 +148,7 @@ fun LoginScreen(
                                     imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff
                                     else Icons.Rounded.Visibility,
                                     contentDescription = null,
-                                    tint = TextSecondary,
+                                    tint = Color.White.copy(alpha = 0.5f),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -146,13 +158,13 @@ fun LoginScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor   = BgCard.copy(alpha = 0.8f),
-                            unfocusedContainerColor = BgCard.copy(alpha = 0.6f),
-                            focusedBorderColor      = AccentBlue.copy(alpha = 0.7f),
-                            unfocusedBorderColor    = GlassStroke,
-                            focusedTextColor        = TextPrimary,
-                            unfocusedTextColor      = TextPrimary,
-                            cursorColor             = AccentCyan
+                            focusedContainerColor   = SpaceSurface,
+                            unfocusedContainerColor = SpaceSurface.copy(alpha = 0.5f),
+                            focusedBorderColor      = PurpleAccent,
+                            unfocusedBorderColor    = SpaceSurface,
+                            focusedTextColor        = Color.White,
+                            unfocusedTextColor      = Color.White,
+                            cursorColor             = PurpleAccent
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -164,7 +176,7 @@ fun LoginScreen(
                         ) {
                             Text(
                                 "Forgot Password?",
-                                color = AccentCyan,
+                                color = PurpleAccent,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier.clickable {
@@ -210,28 +222,28 @@ fun LoginScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    Brush.linearGradient(listOf(AccentBlue, AccentPurple)),
+                                    Brush.linearGradient(listOf(PurpleGlow, PurpleAccent)),
                                     RoundedCornerShape(14.dp)
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
                             if (uiState is AuthUiState.Loading) {
-                                CircularProgressIndicator(color = TextPrimary, modifier = Modifier.size(24.dp))
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                             } else {
                                 Text(
                                     if (isLoginMode) "Log In" else "Create Account",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = TextPrimary
+                                    color = Color.White
                                 )
                             }
                         }
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        HorizontalDivider(Modifier.weight(1f), color = GlassStroke)
-                        Text("  or  ", fontSize = 12.sp, color = TextSecondary)
-                        HorizontalDivider(Modifier.weight(1f), color = GlassStroke)
+                        HorizontalDivider(Modifier.weight(1f), color = SpaceSurface)
+                        Text("  or  ", fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f))
+                        HorizontalDivider(Modifier.weight(1f), color = SpaceSurface)
                     }
 
                     OutlinedButton(
@@ -241,12 +253,12 @@ fun LoginScreen(
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         enabled = uiState !is AuthUiState.Loading,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, GlassStroke),
+                        border = BorderStroke(1.dp, PurpleAccent.copy(alpha = 0.3f)),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = BgCard.copy(alpha = 0.5f), contentColor = TextPrimary
+                            containerColor = SpaceSurface.copy(alpha = 0.5f), contentColor = Color.White
                         )
                     ) {
-                        Icon(Icons.Rounded.Public, null, tint = AccentCyan, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Rounded.Public, null, tint = PurpleAccent, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(10.dp))
                         Text("Continue with Google", fontSize = 14.sp, fontWeight = FontWeight.W500)
                     }
@@ -258,12 +270,12 @@ fun LoginScreen(
                     ) {
                         Text(
                             if (isLoginMode) "New here? " else "Joined already? ",
-                            color = TextSecondary,
+                            color = Color.White.copy(alpha = 0.7f),
                             fontSize = 14.sp
                         )
                         Text(
                             if (isLoginMode) "Sign Up" else "Log In",
-                            color = AccentCyan,
+                            color = PurpleAccent,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.clickable { isLoginMode = !isLoginMode }
@@ -286,22 +298,23 @@ fun GlassTextField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        placeholder = { Text(placeholder, color = TextSecondary, fontSize = 14.sp) },
+        placeholder = { Text(placeholder, color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp) },
         leadingIcon = {
-            Icon(icon, contentDescription = null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = null, tint = PurpleAccent, modifier = Modifier.size(20.dp))
         },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor   = BgCard.copy(alpha = 0.8f),
-            unfocusedContainerColor = BgCard.copy(alpha = 0.6f),
-            focusedBorderColor      = AccentBlue.copy(alpha = 0.7f),
-            unfocusedBorderColor    = GlassStroke,
-            focusedTextColor        = TextPrimary,
-            unfocusedTextColor      = TextPrimary,
-            cursorColor             = AccentCyan
+            focusedContainerColor   = SpaceSurface,
+            unfocusedContainerColor = SpaceSurface.copy(alpha = 0.5f),
+            focusedBorderColor      = PurpleAccent,
+            unfocusedBorderColor    = SpaceSurface,
+            focusedTextColor        = Color.White,
+            unfocusedTextColor      = Color.White,
+            cursorColor             = PurpleAccent
         ),
         modifier = Modifier.fillMaxWidth()
     )
 }
+

@@ -25,21 +25,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.sahil.peerlearn.ui.theme.*
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.abs
 
-// Telegram Dark Colors
-val TelegramBackground = Color(0xFF212121)
-val TelegramTopBar = Color(0xFF1C1C1C)
-val TelegramChatItemHover = Color(0xFF2A2A2A)
-val TelegramOnline = Color(0xFF4DCA5D)
-val TelegramUnread = Color(0xFF4D9BF5)
-val TelegramBlue = Color(0xFF5B9BD5)
-val TelegramDivider = Color(0xFF2A2A2A)
-val TelegramInputField = Color(0xFF2C2C2C)
+// Removed legacy Telegram colors to standardize on Space Theme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,12 +65,12 @@ fun ChatListScreen(
     }
 
     Scaffold(
-        containerColor = TelegramBackground,
+        containerColor = SpaceBlack,
         topBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(TelegramTopBar)
+                    .background(SpaceSurface.copy(alpha = 0.95f))
                     .statusBarsPadding()
             ) {
                 Row(
@@ -102,7 +95,7 @@ fun ChatListScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .background(TelegramInputField, RoundedCornerShape(20.dp))
+                        .background(SpaceBlack, RoundedCornerShape(20.dp))
                         .padding(horizontal = 12.dp, vertical = 4.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -134,12 +127,12 @@ fun ChatListScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             "All Chats",
-                            color = TelegramBlue,
+                            color = PurpleAccent,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
                         Spacer(Modifier.height(4.dp))
-                        Box(modifier = Modifier.width(60.dp).height(2.dp).background(TelegramBlue))
+                        Box(modifier = Modifier.width(60.dp).height(2.dp).background(PurpleAccent))
                     }
                 }
             }
@@ -148,10 +141,25 @@ fun ChatListScreen(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)) {
+            // Standard Space Theme Glow
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .size(450.dp, 300.dp)
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                            colors = listOf(
+                                PurpleGlow.copy(alpha = 0.35f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center),
-                    color = TelegramBlue
+                    color = PurpleAccent
                 )
             } else if (filteredChats.isEmpty()) {
                 Column(
@@ -165,7 +173,7 @@ fun ChatListScreen(
                         Icons.Default.Send, 
                         contentDescription = null, 
                         modifier = Modifier.size(100.dp), 
-                        tint = TelegramChatItemHover
+                        tint = SpaceSurface
                     )
                     Spacer(Modifier.height(16.dp))
                     Text(
@@ -217,6 +225,7 @@ fun ChatListItem(
             .fillMaxWidth()
             .height(72.dp)
             .clickable { onClick() }
+            .background(SpaceBlack)
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.Center
     ) {
@@ -242,8 +251,8 @@ fun ChatListItem(
                     modifier = Modifier
                         .size(12.dp)
                         .align(Alignment.BottomEnd)
-                        .background(TelegramOnline, CircleShape)
-                        .border(2.dp, TelegramBackground, CircleShape)
+                        .background(Color(0xFF4DCA5D), CircleShape)
+                        .border(2.dp, SpaceBlack, CircleShape)
                 )
             }
 
@@ -265,7 +274,7 @@ fun ChatListItem(
                     )
                     Text(
                         formatChatTime(lastMessageTime),
-                        color = if (unreadCount > 0) TelegramBlue else Color.Gray,
+                        color = if (unreadCount > 0) PurpleAccent else Color.Gray,
                         fontSize = 13.sp
                     )
                 }
@@ -278,7 +287,7 @@ fun ChatListItem(
                     if (isPeerTyping) {
                         Text(
                             "typing...",
-                            color = TelegramBlue,
+                            color = PurpleAccent,
                             fontSize = 14.sp,
                             fontStyle = FontStyle.Italic
                         )
@@ -297,7 +306,7 @@ fun ChatListItem(
                         Box(
                             modifier = Modifier
                                 .padding(start = 8.dp)
-                                .background(TelegramUnread, RoundedCornerShape(12.dp))
+                                .background(PurpleGlow, RoundedCornerShape(12.dp))
                                 .padding(horizontal = 8.dp, vertical = 2.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -317,7 +326,7 @@ fun ChatListItem(
             modifier = Modifier
                 .padding(start = 68.dp)
                 .align(Alignment.End),
-            color = TelegramDivider,
+            color = Color.White.copy(alpha = 0.05f),
             thickness = 0.5.dp
         )
     }

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sahil.peerlearn.ui.theme.*
 
 @Composable
 fun PeerCard(
@@ -37,9 +38,9 @@ fun PeerCard(
         modifier = modifier
             .then(if (isVertical) Modifier.fillMaxWidth() else Modifier.width(200.dp))
             .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+        colors = CardDefaults.cardColors(containerColor = SpaceSurface.copy(alpha = 0.6f)),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, Color(0xFF2A2A3D))
+        border = BorderStroke(1.dp, PurpleGlow.copy(alpha = 0.2f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -56,12 +57,12 @@ fun PeerCard(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(CircleShape)
-                            .background(if (isAnonymous) Color.Gray else Color(0xFF7C4DFF).copy(alpha = 0.2f)),
+                            .background(if (isAnonymous) Color.Gray else PurpleAccent.copy(alpha = 0.2f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = displayInitials,
-                            color = if (isAnonymous) Color.White else Color(0xFF7C4DFF),
+                            color = if (isAnonymous) Color.White else PurpleAccent,
                             fontWeight = FontWeight.Bold,
                             fontSize = if (isVertical) 18.sp else 16.sp
                         )
@@ -72,7 +73,7 @@ fun PeerCard(
                             .size(12.dp)
                             .clip(CircleShape)
                             .background(Color(0xFF4CAF50))
-                            .border(2.dp, Color(0xFF1E1E1E), CircleShape)
+                            .border(2.dp, SpaceSurface, CircleShape)
                             .align(Alignment.TopStart)
                     )
                 }
@@ -108,9 +109,9 @@ fun PeerCard(
                     val maxSkills = 2
                     user.teachSkills.take(maxSkills).forEach { skill ->
                         Surface(
-                            color = Color(0xFF1E1E1E),
+                            color = SpaceBlack.copy(alpha = 0.5f),
                             shape = RoundedCornerShape(4.dp),
-                            border = BorderStroke(1.dp, Color(0xFF2A2A3D))
+                            border = BorderStroke(1.dp, PurpleGlow.copy(alpha = 0.2f))
                         ) {
                             Text(
                                 text = "[$skill]",
@@ -138,8 +139,8 @@ fun PeerCard(
                         onClick = onViewProfile ?: onClick,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, Color(0xFF7C4DFF)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF7C4DFF))
+                        border = BorderStroke(1.dp, PurpleAccent),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = PurpleAccent)
                     ) {
                         Text("View Profile", fontSize = 12.sp)
                     }
@@ -147,7 +148,7 @@ fun PeerCard(
                         onClick = onActionClick,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF))
+                        colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent)
                     ) {
                         Text("Chat →", fontSize = 12.sp, color = Color.White)
                     }
@@ -158,7 +159,7 @@ fun PeerCard(
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = "Knows $matchedSkill 🎯",
-                        color = Color(0xFF7C4DFF),
+                        color = PurpleAccent,
                         fontSize = 11.sp
                     )
                 }
@@ -167,7 +168,7 @@ fun PeerCard(
                     onClick = onActionClick,
                     modifier = Modifier.height(32.dp).align(Alignment.End),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
+                    colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
                     Text("Connect", fontSize = 11.sp, color = Color.White)

@@ -1,10 +1,12 @@
 package com.sahil.peerlearn
 
+import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
@@ -48,6 +50,14 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isStatusBarContrastEnforced = false
             window.isNavigationBarContrastEnforced = false
+        }
+
+        // POST_NOTIFICATIONS permission for Android 13+
+        if (Build.VERSION.SDK_INT >= 33) {
+            requestPermissions(
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                1001
+            )
         }
 
         // OneSignal Initialization
@@ -191,6 +201,7 @@ fun MainAppContent(user: FirebaseUser, authManager: AuthManager) {
     val showBottomBar = currentRoute in listOf("home", "feed", "chat_list", "profile")
 
     Scaffold(
+        containerColor = com.sahil.peerlearn.ui.theme.SpaceBlack,
         bottomBar = {
             if (showBottomBar) {
                 BottomNavBar(navController)
@@ -283,7 +294,7 @@ fun BottomNavBar(navController: NavController) {
     )
 
     NavigationBar(
-        containerColor = Color(0xFF1C1C1C),
+        containerColor = com.sahil.peerlearn.ui.theme.SpaceSurface,
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding(),
@@ -319,11 +330,11 @@ fun BottomNavBar(navController: NavController) {
                 },
                 label = { Text(item.label) },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color(0xFF5B9BD5),
-                    selectedTextColor = Color(0xFF5B9BD5),
+                    selectedIconColor = com.sahil.peerlearn.ui.theme.PurpleAccent,
+                    selectedTextColor = com.sahil.peerlearn.ui.theme.PurpleAccent,
                     indicatorColor = Color.Transparent,
-                    unselectedIconColor = Color(0xFF9E9E9E),
-                    unselectedTextColor = Color(0xFF9E9E9E)
+                    unselectedIconColor = com.sahil.peerlearn.ui.theme.TextSecondary,
+                    unselectedTextColor = com.sahil.peerlearn.ui.theme.TextSecondary
                 )
             )
         }
