@@ -1,6 +1,7 @@
 package com.sahil.peerlearn
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,12 +18,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sahil.peerlearn.ui.theme.PurpleAccent
+import com.sahil.peerlearn.ui.theme.PurpleGlow
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
-import com.sahil.peerlearn.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -30,11 +34,13 @@ import java.util.*
 @Composable
 fun NotificationScreen(
     onBackClick: () -> Unit,
+    onNavigateToChat: (String) -> Unit,
     viewModel: NotificationViewModel = viewModel()
 ) {
     val currentUid = Firebase.auth.currentUser?.uid ?: ""
     val currentUserName = Firebase.auth.currentUser?.displayName ?: "Peer"
     val notifications by viewModel.notifications.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(currentUid) {
         if (currentUid.isNotEmpty()) {
@@ -42,86 +48,117 @@ fun NotificationScreen(
         }
     }
 
-    Box(
+    LaunchedEffect(Unit) {
+        viewModel.navigationEvent.collect { event ->
+            when (event) {
+                is NotificationNavEvent.NavigateToChat -> {
+                    onNavigateToChat(event.peerUid)
+                }
+            }
+        }
+    }
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(SpaceBlack)
+            .background(Color(0xFF121212))
     ) {
-        // Radial Glow
-        Box(
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+        // TOP BAR
+        Row(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .size(450.dp, 300.dp)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            PurpleGlow.copy(alpha = 0.35f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                CenterAlignedTopAppBar(
-                    title = { Text("Notifications", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
-                    navigationIcon = {
-                        IconButton(onClick = onBackClick) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
-                        }
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = Color.Transparent,
-                        titleContentColor = Color.White,
-                        navigationIconContentColor = Color.White
-                    )
+                .fillMaxWidth()
+                .background(Color(0xFF1C1C1C))
+                .statusBarsPadding()
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBackClick) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White
                 )
             }
-        ) { padding ->
-            if (notifications.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Rounded.NotificationsNone,
-                            null,
-                            modifier = Modifier.size(64.dp),
-                            tint = TextSecondary.copy(alpha = 0.5f)
+            Text(
+                "Notifications",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        when (val state = uiState) {
+            is NotificationUiState.Loading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = PurpleAccent)
+                }
+            }
+            is NotificationUiState.Error -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Error: ${state.message}", color = Color.Red, textAlign = TextAlign.Center)
+                }
+            }
+            else -> {
+                if (notifications.isEmpty()) {
+                    // EMPTY STATE
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            "🔔",
+                            fontSize = 64.sp
                         )
                         Spacer(Modifier.height(16.dp))
-                        Text("No notifications yet", color = TextSecondary)
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(notifications) { notification ->
-                        NotificationCard(
-                            notification = notification,
-                            onAccept = {
-                                viewModel.acceptConnection(
-                                    notification,
-                                    currentUid,
-                                    currentUserName
-                                )
-                            },
-                            onDecline = { viewModel.declineConnection(notification, currentUid) },
-                            onRead = { if (!notification.isRead) viewModel.markAsRead(notification.id) }
+                        Text(
+                            "No notifications yet!",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
                         )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Connect with peers to get\n" +
+                                    "notifications here",
+                            color = Color(0xFF9E9E9E),
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp)
+                    ) {
+                        items(notifications) { notif ->
+                            NotificationCard(
+                                notification = notif,
+                                onAccept = {
+                                    viewModel.acceptConnection(
+                                        notif,
+                                        currentUid,
+                                        currentUserName
+                                    )
+                                },
+                                onDecline = {
+                                    viewModel.declineConnection(
+                                        notif,
+                                        currentUid
+                                    )
+                                }
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
                     }
                 }
             }
+        }
         }
     }
 }
@@ -130,62 +167,112 @@ fun NotificationScreen(
 fun NotificationCard(
     notification: NotificationItem,
     onAccept: () -> Unit,
-    onDecline: () -> Unit,
-    onRead: () -> Unit
+    onDecline: () -> Unit
 ) {
-    LaunchedEffect(Unit) { onRead() }
-
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(
+                0.5.dp,
+                Brush.horizontalGradient(
+                    listOf(Color.White.copy(alpha = 0.15f), Color.Transparent)
+                ),
+                RoundedCornerShape(14.dp)
+            ),
         colors = CardDefaults.cardColors(
-            containerColor = if (notification.isRead) SpaceSurface.copy(alpha = 0.5f) else SpaceSurface
-        ),
-        shape = RoundedCornerShape(16.dp),
-        border = if (!notification.isRead) androidx.compose.foundation.BorderStroke(
-            1.dp,
-            PurpleGlow.copy(alpha = 0.3f)
-        ) else null
+            containerColor = Color.Transparent
+        )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Avatar
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(PurpleAccent.copy(alpha = 0.2f)),
+                        .size(48.dp)
+                        .background(
+                            Brush.linearGradient(listOf(PurpleAccent, PurpleGlow)),
+                            CircleShape
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        notification.fromName.firstOrNull()?.toString()?.uppercase() ?: "?",
-                        color = PurpleAccent,
+                        notification.fromName.firstOrNull()?.uppercase() ?: "?",
+                        color = Color.White,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
+
                 Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(notification.fromName, fontWeight = FontWeight.Bold, color = Color.White)
-                    Text(notification.message, fontSize = 14.sp, color = TextSecondary)
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        notification.fromName,
+                        color = Color.White,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        notification.message,
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
+                    Text(
+                        formatTimeAgo(notification.createdAt),
+                        color = Color.White.copy(alpha = 0.4f),
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
-                Text(
-                    formatTimestamp(notification.createdAt?.toDate()),
-                    fontSize = 11.sp,
-                    color = TextSecondary.copy(alpha = 0.7f)
-                )
             }
 
             if (notification.type == "connection_request") {
                 Spacer(Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDecline) {
-                        Text("Decline", color = Color(0xFFFF5252))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Decline
+                    OutlinedButton(
+                        onClick = onDecline,
+                        modifier = Modifier.weight(1f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, Color(0xFFE53935).copy(alpha = 0.5f)
+                        ),
+                        shape = CircleShape,
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        Text(
+                            "Decline",
+                            color = Color(0xFFE53935),
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
-                    Spacer(Modifier.width(8.dp))
+
+                    // Accept
                     Button(
                         onClick = onAccept,
-                        colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent),
-                        shape = RoundedCornerShape(8.dp)
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF4CAF50)
+                        ),
+                        shape = CircleShape,
+                        contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
-                        Text("Accept ✓", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Accept",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -193,15 +280,15 @@ fun NotificationCard(
     }
 }
 
-fun formatTimestamp(date: Date?): String {
-    if (date == null) return ""
-    val now = Calendar.getInstance().time
-    val diff = now.time - date.time
-    
+fun formatTimeAgo(timestamp: com.google.firebase.Timestamp?): String {
+    if (timestamp == null) return ""
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp.toDate().time
+
     return when {
-        diff < 60000 -> "Just now"
-        diff < 3600000 -> "${diff / 60000}m ago"
-        diff < 86400000 -> "${diff / 3600000}h ago"
-        else -> SimpleDateFormat("MMM dd", Locale.getDefault()).format(date)
+        diff < 60_000 -> "Just now"
+        diff < 3_600_000 -> "${diff / 60_000}m ago"
+        diff < 86_400_000 -> "${diff / 3_600_000}h ago"
+        else -> "${diff / 86_400_000}d ago"
     }
 }

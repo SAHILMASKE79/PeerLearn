@@ -1,7 +1,5 @@
 package com.sahil.peerlearn
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,8 +31,6 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.abs
 
-// Removed legacy Telegram colors to standardize on Space Theme
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatListScreen(
@@ -43,9 +40,7 @@ fun ChatListScreen(
     val currentUid = Firebase.auth.currentUser?.uid ?: ""
     var allChatSummaries by remember { mutableStateOf<List<ChatSummary>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-
     var searchQuery by remember { mutableStateOf("") }
-    var showSearch by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentUid) {
         if (currentUid.isNotEmpty()) {
@@ -64,144 +59,154 @@ fun ChatListScreen(
         }
     }
 
-    Scaffold(
-        containerColor = SpaceBlack,
-        topBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(SpaceSurface.copy(alpha = 0.95f))
-                    .statusBarsPadding()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "PeerLearn",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = { /* More options */ }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.White)
-                    }
-                }
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val screenWidth = maxWidth
+        val isCompact = screenWidth < 360.dp
+        val horizontalPadding = if (isCompact) 12.dp else 16.dp
+        val glowWidth = screenWidth * 1.15f
 
-                Box(
+        Scaffold(
+            containerColor = SpaceBlack,
+            topBar = {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .background(SpaceBlack, RoundedCornerShape(20.dp))
-                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .background(SpaceSurface.copy(alpha = 0.95f))
+                        .statusBarsPadding()
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        TextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search", color = Color.Gray) },
-                            modifier = Modifier.weight(1f),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            ),
-                            singleLine = true
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = horizontalPadding, vertical = if (isCompact) 10.dp else 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            "All Chats",
-                            color = PurpleAccent,
+                            "PeerLearn",
+                            color = Color.White,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
+                            modifier = Modifier.weight(1f)
                         )
-                        Spacer(Modifier.height(4.dp))
-                        Box(modifier = Modifier.width(60.dp).height(2.dp).background(PurpleAccent))
+                        IconButton(onClick = { /* More options */ }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.White)
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = horizontalPadding, vertical = 8.dp)
+                            .background(SpaceBlack, RoundedCornerShape(20.dp))
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            TextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = { Text("Search", color = Color.Gray) },
+                                modifier = Modifier.weight(1f),
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent
+                                ),
+                                singleLine = true
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = horizontalPadding, vertical = 8.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "All Chats",
+                                color = PurpleAccent,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Box(modifier = Modifier.width(60.dp).height(2.dp).background(PurpleAccent))
+                        }
                     }
                 }
             }
-        }
-    ) { padding ->
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)) {
-            // Standard Space Theme Glow
+        ) { paddingValues ->
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .size(450.dp, 300.dp)
-                    .background(
-                        brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                            colors = listOf(
-                                PurpleGlow.copy(alpha = 0.35f),
-                                Color.Transparent
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                // Standard Space Theme Glow
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .width(glowWidth)
+                        .height(if (isCompact) 220.dp else 300.dp)
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                                colors = listOf(
+                                    PurpleGlow.copy(alpha = 0.35f),
+                                    Color.Transparent
+                                )
                             )
                         )
-                    )
-            )
-
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = PurpleAccent
                 )
-            } else if (filteredChats.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        Icons.Default.Send, 
-                        contentDescription = null, 
-                        modifier = Modifier.size(100.dp), 
-                        tint = SpaceSurface
+
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = PurpleAccent
                     )
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        if (searchQuery.isEmpty()) "No chats yet" else "No results found",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        if (searchQuery.isEmpty()) "Start messaging with peers" else "Try a different name",
-                        color = Color.Gray,
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(filteredChats) { summary ->
-                        ChatListItem(
-                            peer = summary.peer,
-                            lastMessage = summary.lastMessage,
-                            lastMessageTime = summary.lastMessageTimestamp?.toDate() ?: Date(),
-                            unreadCount = summary.unreadCount,
-                            isPeerTyping = false, // In a real app, this would come from a live status
-                            onClick = {
-                                navController.navigate("chat/${summary.peer.uid}")
-                            }
+                } else if (filteredChats.isEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Send,
+                            contentDescription = null,
+                            modifier = Modifier.size(100.dp),
+                            tint = SpaceSurface
                         )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            if (searchQuery.isEmpty()) "No chats yet" else "No results found",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (searchQuery.isEmpty()) "Start messaging with peers" else "Try a different name",
+                            color = Color.Gray,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        items(filteredChats) { summary ->
+                            ChatListItem(
+                                peer = summary.peer,
+                                lastMessage = summary.lastMessage,
+                                lastMessageTime = summary.lastMessageTimestamp?.toDate() ?: Date(),
+                                unreadCount = summary.unreadCount,
+                                isPeerTyping = false,
+                                onClick = {
+                                    navController.navigate("chat/${summary.peer.uid}")
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -223,7 +228,7 @@ fun ChatListItem(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp)
+            .heightIn(min = 72.dp)
             .clickable { onClick() }
             .background(SpaceBlack)
             .padding(horizontal = 16.dp),
@@ -301,7 +306,7 @@ fun ChatListItem(
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    
+
                     if (unreadCount > 0) {
                         Box(
                             modifier = Modifier
@@ -321,7 +326,7 @@ fun ChatListItem(
                 }
             }
         }
-        
+
         HorizontalDivider(
             modifier = Modifier
                 .padding(start = 68.dp)
@@ -347,14 +352,14 @@ fun getAvatarColor(name: String): Color {
     return colors[index]
 }
 
-private fun formatChatTime(date: Date): String {
+fun formatChatTime(date: Date): String {
     val now = Calendar.getInstance()
     val chatTime = Calendar.getInstance().apply { time = date }
-    
+
     return when {
         now.get(Calendar.DATE) == chatTime.get(Calendar.DATE) &&
-        now.get(Calendar.MONTH) == chatTime.get(Calendar.MONTH) &&
-        now.get(Calendar.YEAR) == chatTime.get(Calendar.YEAR) -> {
+                now.get(Calendar.MONTH) == chatTime.get(Calendar.MONTH) &&
+                now.get(Calendar.YEAR) == chatTime.get(Calendar.YEAR) -> {
             SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
         }
         now.get(Calendar.DAY_OF_YEAR) - chatTime.get(Calendar.DAY_OF_YEAR) == 1 -> {

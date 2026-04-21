@@ -2,6 +2,10 @@ package com.sahil.peerlearn
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.Firebase
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.firestore
+import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -12,9 +16,9 @@ sealed class HomeUiState {
 }
 
 class HomeViewModel(
-    private val repository: HomeRepository,
-    private val userRepository: UserRepository
-) : ViewModel() {
+    private val repository: HomeRepository
+) : ViewModel(), ConnectionViewModel {
+    private val firestore = Firebase.firestore
     private val _currentUser = MutableStateFlow<UserProfile?>(null)
     val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
 
@@ -30,37 +34,69 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    private val _recommendedPeersWithMatch = MutableStateFlow<List<Pair<UserProfile, Int>>>(emptyList())
+    val recommendedPeersWithMatch: StateFlow<List<Pair<UserProfile, Int>>> = _recommendedPeersWithMatch.asStateFlow()
+
     fun initHome(uid: String) {
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
-            
-            // Observe unread notifications
-            userRepository.getNotifications(uid).collect { notifications ->
-                _unreadCount.value = notifications.count { !it.isRead }
-            }
-        }
-        
-        viewModelScope.launch {
-            try {
-                // Fetch current user in real-time
-                repository.getCurrentUser(uid).collect { user ->
-                    _currentUser.value = user
-                    if (user != null) {
-                        fetchPeers(user)
-                    }
+
+            // Observe current user and all users
+            combine(
+                repository.getCurrentUser(uid),
+                repository.getAllUsersStream()
+            ) { currentUser, allUsers ->
+                val realUsers = allUsers.filter { it.name.isNotBlank() && it.name != "Unknown" && it.name.length > 1 }
+                _currentUser.value = currentUser
+                _allPeers.value = realUsers // Update _allPeers with only real users
+
+                if (currentUser != null) {
+                    val recommended = realUsers
+                        .filter { it.uid != currentUser.uid }
+                        .map { peer ->
+                            val matchCount = peer.teachSkills.count { it in currentUser.learnSkills }
+                            val totalPossibleMatches = currentUser.learnSkills.size.coerceAtLeast(1)
+                            val matchPercentage = ((matchCount.toFloat() / totalPossibleMatches) * 100).toInt()
+                            peer to matchPercentage
+                        }
+                        .filter { it.second > 0 }
+                        .sortedByDescending { it.second }
+                        .take(5)
+                    
+                    _recommendedPeersWithMatch.value = recommended
+                    _recommendedPeers.value = recommended.map { it.first }
+                } else {
+                    _recommendedPeersWithMatch.value = emptyList()
+                    _recommendedPeers.value = emptyList()
                 }
-            } catch (e: Exception) {
-                _uiState.value = HomeUiState.Error(e.message ?: "Unknown error")
-            }
+                _uiState.value = HomeUiState.Success
+            }.collect()
         }
     }
 
-    private suspend fun fetchPeers(user: UserProfile) {
-        val recommended = repository.getRecommendedPeers(user.learnSkills, user.uid)
-        val all = repository.getAllPeers(user.uid)
-        
-        _recommendedPeers.value = recommended
-        _allPeers.value = all
-        _uiState.value = HomeUiState.Success
+    override fun sendConnectionRequest(currentUid: String, peerUid: String) {
+        val connectionId = listOf(currentUid, peerUid)
+            .sorted().joinToString("_")
+        val data = mapOf(
+            "user1" to currentUid,
+            "user2" to peerUid,
+            "status" to "pending",
+            "timestamp" to FieldValue.serverTimestamp()
+        )
+        firestore.collection("connections")
+            .document(connectionId)
+            .set(data)
+    }
+
+    override fun getConnectionStatus(
+        currentUid: String,
+        peerUid: String
+    ): Flow<String> {
+        val connectionId = listOf(currentUid, peerUid)
+            .sorted().joinToString("_")
+        return firestore.collection("connections")
+            .document(connectionId)
+            .snapshots()
+            .map { it.getString("status") ?: "none" }
     }
 }

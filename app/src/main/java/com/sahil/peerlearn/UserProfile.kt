@@ -16,5 +16,6 @@ data class UserProfile(
     @ServerTimestamp
     val createdAt: Timestamp? = null,
     val teachSkills: List<String> = emptyList(),
-    val learnSkills: List<String> = emptyList()
+    val learnSkills: List<String> = emptyList(),
+    val profileImageUrl: String = ""
 )

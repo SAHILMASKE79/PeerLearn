@@ -1,11 +1,17 @@
 package com.sahil.peerlearn
 
 import com.google.firebase.Firebase
+import com.google.firebase.app
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
 import com.google.firebase.firestore.snapshots
+import com.google.firebase.storage.storage
+import android.net.Uri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -18,11 +24,28 @@ import org.json.JSONObject
 
 class UserRepository {
     private val db = Firebase.firestore
+    private val storage = Firebase.storage
     private val usersCollection = db.collection("users")
 
-    /**
-     * Called ONLY on signup. Sets both immutable and mutable fields.
-     */
+    suspend fun uploadProfileImage(uid: String, imageUri: Uri): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val storageRef = storage.reference.child("profile_images/$uid.jpg")
+            if (imageUri.scheme == "file") {
+                storageRef.putFile(imageUri).await()
+            } else {
+                val inputStream = storage.app.applicationContext.contentResolver.openInputStream(imageUri)
+                inputStream?.use { stream ->
+                    storageRef.putStream(stream).await()
+                } ?: throw Exception("Could not open image stream")
+            }
+            val downloadUrl = storageRef.downloadUrl.await().toString()
+            usersCollection.document(uid).update("profileImageUrl", downloadUrl).await()
+            Result.success(downloadUrl)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun createUserProfile(uid: String, email: String, name: String): Result<Unit> {
         return try {
             val userProfile = mutableMapOf(
@@ -59,9 +82,6 @@ class UserRepository {
         }
     }
 
-    /**
-     * Updates ONLY mutable fields. Never touches uid, email, createdAt, role.
-     */
     suspend fun updateUserProfile(
         uid: String,
         name: String,
@@ -120,20 +140,33 @@ class UserRepository {
         return try {
             val document = usersCollection.document(uid).get().await()
             if (!document.exists()) return false
-            
-            val name = document.getString("name") ?: ""
-            name.isNotEmpty()
+            val college = document.getString("college") ?: ""
+            college.isNotEmpty()
         } catch (e: Exception) {
             false
         }
     }
 
-    /**
-     * Real-time Firestore listener for user profile.
-     */
     fun getUserProfile(uid: String): Flow<UserProfile?> {
         return usersCollection.document(uid).snapshots().map { snapshot ->
-            snapshot.toObject(UserProfile::class.java)
+            if (!snapshot.exists()) null
+            else UserProfile(
+                uid = snapshot.getString("uid") ?: uid,
+                email = snapshot.getString("email") ?: "",
+                name = snapshot.getString("name") ?: "",
+                bio = snapshot.getString("bio") ?: "",
+                college = snapshot.getString("college") ?: "",
+                year = snapshot.getString("year") ?: "",
+                githubLink = snapshot.getString("githubLink") ?: "",
+                linkedinLink = snapshot.getString("linkedinLink") ?: "",
+                role = snapshot.getString("role") ?: "student",
+                createdAt = snapshot.getTimestamp("createdAt") as Timestamp?,
+                teachSkills = (snapshot.get("teachSkills") as? List<*>)
+                    ?.mapNotNull { it as? String } ?: emptyList(),
+                learnSkills = (snapshot.get("learnSkills") as? List<*>)
+                    ?.mapNotNull { it as? String } ?: emptyList(),
+                profileImageUrl = snapshot.getString("profileImageUrl") ?: ""
+            )
         }
     }
 
@@ -143,11 +176,26 @@ class UserRepository {
         return listOf(uid1, uid2).sorted().joinToString("_")
     }
 
-    suspend fun sendConnectionRequest(currentUid: String, currentUserName: String, peerUid: String): Result<Unit> {
+    suspend fun sendConnectionRequest(
+        currentUid: String,
+        currentUserName: String,
+        peerUid: String
+    ): Result<Unit> {
         return try {
             val docId = getConnectionDocId(currentUid, peerUid)
+
+            // Check if connection already exists
+            val existing = db.collection("connections").document(docId).get().await()
+            if (existing.exists()) {
+                return Result.failure(Exception("Connection already exists"))
+            }
+
             val sortedUids = listOf(currentUid, peerUid).sorted()
-            
+
+            val senderName = if (currentUserName == "Peer" || currentUserName.isEmpty()) {
+                usersCollection.document(currentUid).get().await().getString("name") ?: "A Peer"
+            } else currentUserName
+
             val connectionData = mapOf(
                 "user1" to sortedUids[0],
                 "user2" to sortedUids[1],
@@ -158,17 +206,22 @@ class UserRepository {
             )
             db.collection("connections").document(docId).set(connectionData).await()
 
-            // Create notification
             val notificationData = mapOf(
                 "toUid" to peerUid,
                 "fromUid" to currentUid,
-                "fromName" to currentUserName,
+                "fromName" to senderName,
                 "type" to "connection_request",
-                "message" to "$currentUserName wants to connect with you! 🤝",
+                "message" to "$senderName wants to connect with you! 🤝",
                 "isRead" to false,
                 "createdAt" to FieldValue.serverTimestamp()
             )
             db.collection("notifications").add(notificationData).await()
+
+            sendPushNotification(
+                toUid = peerUid,
+                title = "New Connection Request",
+                body = "$senderName wants to connect with you! 🤝"
+            )
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -185,6 +238,7 @@ class UserRepository {
                 val status = when (snapshot.getString("status")) {
                     "pending" -> ConnectionStatus.PENDING
                     "connected" -> ConnectionStatus.CONNECTED
+                    "disconnected" -> ConnectionStatus.DISCONNECTED
                     else -> ConnectionStatus.NOT_CONNECTED
                 }
                 ConnectionDetails(
@@ -195,18 +249,60 @@ class UserRepository {
         }
     }
 
+    suspend fun disconnectPeer(currentUid: String, peerUid: String): Result<Unit> {
+        return try {
+            val docId = getConnectionDocId(currentUid, peerUid)
+            db.collection("connections").document(docId)
+                .update("status", "disconnected").await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ── Notifications ──
 
     fun getNotifications(uid: String): Flow<List<NotificationItem>> {
         return db.collection("notifications")
             .whereEqualTo("toUid", uid)
-            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
             .snapshots()
             .map { snapshot ->
-                snapshot.documents.map { doc ->
-                    doc.toObject(NotificationItem::class.java)!!.copy(id = doc.id)
+                try {
+                    snapshot.documents.mapNotNull { doc ->
+                        doc.toObject(NotificationItem::class.java)?.copy(id = doc.id)
+                    }.sortedByDescending { it.createdAt }
+                } catch (e: Exception) {
+                    emptyList()
                 }
             }
+    }
+
+    fun getUnreadNotificationCount(uid: String): Flow<Int> {
+        return db.collection("notifications")
+            .whereEqualTo("toUid", uid)
+            .whereEqualTo("isRead", false)
+            .snapshots()
+            .map { it.size() }
+    }
+
+    suspend fun markAllNotificationsAsRead(uid: String): Result<Unit> {
+        return try {
+            val unreadNotifications = db.collection("notifications")
+                .whereEqualTo("toUid", uid)
+                .whereEqualTo("isRead", false)
+                .get().await()
+
+            if (unreadNotifications.isEmpty) return Result.success(Unit)
+
+            val batch = db.batch()
+            for (doc in unreadNotifications.documents) {
+                batch.update(doc.reference, "isRead", true)
+            }
+            batch.commit().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun acceptConnection(
@@ -217,49 +313,49 @@ class UserRepository {
     ): Result<Unit> {
         return try {
             val docId = getConnectionDocId(currentUid, fromUid)
-            
-            // 1. Update connection
+
+            val senderName = if (currentUserName == "Peer" || currentUserName.isEmpty()) {
+                usersCollection.document(currentUid).get().await().getString("name") ?: "A Peer"
+            } else currentUserName
+
             db.collection("connections").document(docId)
                 .update(mapOf(
                     "status" to "connected",
                     "connectedAt" to FieldValue.serverTimestamp()
                 )).await()
-            
-            // 2. Delete notification (if ID provided)
+
             if (notificationId.isNotEmpty()) {
                 db.collection("notifications").document(notificationId).delete().await()
             }
-            
-            // 3. Send notification back
+
             val notificationData = mapOf(
                 "toUid" to fromUid,
                 "fromUid" to currentUid,
-                "fromName" to currentUserName,
+                "fromName" to senderName,
                 "type" to "connection_accepted",
-                "message" to "$currentUserName accepted your request! 🎉",
+                "message" to "$senderName accepted your request! 🎉",
                 "isRead" to false,
                 "createdAt" to FieldValue.serverTimestamp()
             )
             db.collection("notifications").add(notificationData).await()
-            
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun declineConnection(notificationId: String, currentUid: String, fromUid: String): Result<Unit> {
+    suspend fun declineConnection(
+        notificationId: String,
+        currentUid: String,
+        fromUid: String
+    ): Result<Unit> {
         return try {
             val docId = getConnectionDocId(currentUid, fromUid)
-            
-            // 1. Delete connection
             db.collection("connections").document(docId).delete().await()
-            
-            // 2. Delete notification (if ID provided)
             if (notificationId.isNotEmpty()) {
                 db.collection("notifications").document(notificationId).delete().await()
             }
-            
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -289,11 +385,13 @@ class UserRepository {
                 .get().await()
 
             val peerUids = (connections1.documents + connections2.documents).map { doc ->
-                if (doc.getString("user1") == uid) doc.getString("user2")!! else doc.getString("user1")!!
+                if (doc.getString("user1") == uid) doc.getString("user2")!!
+                else doc.getString("user1")!!
             }.distinct()
 
             val profiles = peerUids.mapNotNull { peerUid ->
-                usersCollection.document(peerUid).get().await().toObject(UserProfile::class.java)
+                usersCollection.document(peerUid).get().await()
+                    .toObject(UserProfile::class.java)
             }
 
             Result.success(profiles)
@@ -302,36 +400,74 @@ class UserRepository {
         }
     }
 
-    fun getChatSummaries(uid: String): Flow<List<ChatSummary>> {
-        val connections1 = db.collection("connections")
-            .whereEqualTo("user1", uid)
-            .whereEqualTo("status", "connected")
-            .snapshots()
+    // ✅ FIXED: Only "connected" status + proper error handling
+    fun getChatSummaries(currentUid: String): Flow<List<ChatSummary>> = callbackFlow {
+        val listener = db.collection("connections")
+            .addSnapshotListener { snap, err ->
+                if (err != null) {
+                    android.util.Log.e("ChatSummaries", "Error: ${err.message}")
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                if (snap == null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
 
-        val connections2 = db.collection("connections")
-            .whereEqualTo("user2", uid)
-            .whereEqualTo("status", "connected")
-            .snapshots()
+                // ✅ Only show "connected" status connections
+                val myConnections = snap.documents.filter { doc ->
+                    val u1 = doc.getString("user1") ?: ""
+                    val u2 = doc.getString("user2") ?: ""
+                    val status = doc.getString("status") ?: ""
+                    (u1 == currentUid || u2 == currentUid) && status == "connected"
+                }
 
-        // Combine both queries
-        return kotlinx.coroutines.flow.combine(connections1, connections2) { s1, s2 ->
-            (s1.documents + s2.documents).distinctBy { it.id }
-        }.map { docs ->
-            docs.map { doc ->
-                val peerUid = if (doc.getString("user1") == uid) doc.getString("user2")!! else doc.getString("user1")!!
-                val peerProfile = usersCollection.document(peerUid).get().await().toObject(UserProfile::class.java)
-                    ?: UserProfile(uid = peerUid, name = "Unknown")
-                
-                ChatSummary(
-                    peer = peerProfile,
-                    lastMessage = doc.getString("lastMessage") ?: "",
-                    lastMessageTimestamp = doc.getTimestamp("lastMessageTimestamp"),
-                    unreadCount = 0 // For now, we don't have unread count logic implemented
-                )
-            }.sortedByDescending { it.lastMessageTimestamp }
-        }
+                if (myConnections.isEmpty()) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+
+                val summaries = mutableListOf<ChatSummary>()
+                var pending = myConnections.size
+
+                myConnections.forEach { doc ->
+                    val u1 = doc.getString("user1") ?: ""
+                    val u2 = doc.getString("user2") ?: ""
+                    val peerUid = if (u1 == currentUid) u2 else u1
+                    val lastMessage = doc.getString("lastMessage") ?: ""
+                    val lastTimestamp = doc.getTimestamp("lastMessageTimestamp")
+
+                    db.collection("users").document(peerUid).get()
+                        .addOnSuccessListener { userDoc ->
+                            val peer = userDoc.toObject(UserProfile::class.java)?.copy(uid = peerUid)
+                            if (peer != null) {
+                                summaries.add(
+                                    ChatSummary(
+                                        peer = peer,
+                                        lastMessage = lastMessage,
+                                        lastMessageTimestamp = lastTimestamp,
+                                        unreadCount = 0
+                                    )
+                                )
+                            }
+                            pending--
+                            if (pending == 0) {
+                                trySend(summaries.sortedByDescending {
+                                    it.lastMessageTimestamp?.seconds ?: 0
+                                })
+                            }
+                        }
+                        .addOnFailureListener {
+                            pending--
+                            if (pending == 0) trySend(summaries.toList())
+                        }
+                }
+            }
+
+        awaitClose { listener.remove() }
     }
 
+    // ✅ FIXED: Messages now stored in chats/{chatId}/messages subcollection
     suspend fun sendMessage(
         chatId: String,
         senderId: String,
@@ -342,20 +478,21 @@ class UserRepository {
         language: String? = null
     ): Result<Unit> {
         return try {
-            val messageData = mutableMapOf(
-                "chatId" to chatId,
+            val messageData = mutableMapOf<String, Any>(
                 "senderId" to senderId,
                 "receiverId" to receiverId,
-                "message" to messageText,
+                "text" to messageText,
                 "timestamp" to FieldValue.serverTimestamp(),
                 "type" to type,
                 "isRead" to false
             )
-            language?.let { messageData["language"] = it }
+            language?.let { messageData["codeLanguage"] = it }
 
-            db.collection("messages").add(messageData).await()
+            // ✅ Correct path: chats/{chatId}/messages subcollection
+            db.collection("chats").document(chatId)
+                .collection("messages").add(messageData).await()
 
-            // Update last message in connections
+            // ✅ Update last message in connections document
             db.collection("connections").document(chatId).update(
                 mapOf(
                     "lastMessage" to messageText,
@@ -363,79 +500,77 @@ class UserRepository {
                 )
             ).await()
 
-            // Get peer FCM token
-            val peerDoc = db.collection("users").document(receiverId).get().await()
-            val fcmToken = peerDoc.getString("fcmToken")
-            
-            if (fcmToken != null) {
-                // Save notification to fcm_queue for Cloud Functions
-                db.collection("fcm_queue").add(mapOf(
-                    "token" to fcmToken,
-                    "title" to senderName,
-                    "body" to messageText,
-                    "createdAt" to FieldValue.serverTimestamp()
-                ))
-            }
-
-            // OneSignal Push Notification
-            val receiverDoc = db.collection("users").document(receiverId).get().await()
-            val oneSignalId = receiverDoc.getString("oneSignalId")
-            if (oneSignalId != null) {
-                sendPushNotification(
-                    toOneSignalId = oneSignalId,
-                    title = senderName,
-                    body = messageText
-                )
-            }
+            // Push notification
+            sendPushNotification(
+                toUid = receiverId,
+                title = senderName,
+                body = messageText
+            )
 
             Result.success(Unit)
         } catch (e: Exception) {
+            android.util.Log.e("sendMessage", "Failed: ${e.message}")
             Result.failure(e)
         }
     }
 
+    // ✅ FIXED: getMessages bhi same subcollection se fetch karo
+    fun getMessages(chatId: String): Flow<List<ChatMessage>> = callbackFlow {
+        val listener = db.collection("chats").document(chatId)
+            .collection("messages")
+            .orderBy("timestamp")
+            .addSnapshotListener { snap, err ->
+                if (err != null) {
+                    android.util.Log.e("getMessages", "Error: ${err.message}")
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val messages = snap?.documents?.mapNotNull { doc ->
+                    doc.toObject(ChatMessage::class.java)?.copy(id = doc.id)
+                } ?: emptyList()
+                trySend(messages)
+            }
+        awaitClose { listener.remove() }
+    }
+
     suspend fun sendPushNotification(
-        toOneSignalId: String,
+        toUid: String,
         title: String,
         body: String
     ) = withContext(Dispatchers.IO) {
         try {
-            android.util.Log.d("OneSignal", "Sending to: $toOneSignalId")
-            
             val client = OkHttpClient()
             val json = JSONObject().apply {
                 put("app_id", "74ed12e3-94a3-48bc-b54e-41651cc735cc")
-                put("include_subscription_ids", JSONArray().apply { put(toOneSignalId) })
+                put("include_external_user_ids", JSONArray().apply { put(toUid) })
                 put("headings", JSONObject().apply { put("en", title) })
                 put("contents", JSONObject().apply { put("en", body) })
             }
-
             val requestBody = json.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder()
                 .url("https://onesignal.com/api/v1/notifications")
                 .post(requestBody)
-                .addHeader("Authorization", "Basic YOUR_REST_API_KEY") // Replace with your actual REST API Key
+                .addHeader("Authorization", "Basic YOUR_REST_API_KEY")
                 .build()
-
             client.newCall(request).execute().use { response ->
-                val responseCode = response.code
-                val responseBody = response.body?.string() ?: ""
-                
-                android.util.Log.d("OneSignal", "Response: $responseCode")
-                android.util.Log.d("OneSignal", "Body: $responseBody")
-
                 if (!response.isSuccessful) {
-                    android.util.Log.e("OneSignal", "Failed: $responseBody")
+                    android.util.Log.e("OneSignal", "Push failed: ${response.body?.string()}")
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e("OneSignal", "Error: ${e.message}")
+            android.util.Log.e("OneSignal", "Push Error: ${e.message}")
+        }
+    }
+
+    fun getAllUserProfiles(): Flow<List<UserProfile>> {
+        return usersCollection.snapshots().map { snapshot ->
+            snapshot.toObjects(UserProfile::class.java)
         }
     }
 }
 
 enum class ConnectionStatus {
-    NOT_CONNECTED, PENDING, CONNECTED
+    NOT_CONNECTED, PENDING, CONNECTED, DISCONNECTED
 }
 
 data class ConnectionDetails(
@@ -450,3 +585,13 @@ data class ChatSummary(
     val unreadCount: Int = 0
 )
 
+data class ChatMessage(
+    val id: String = "",
+    val senderId: String = "",
+    val receiverId: String = "",
+    val text: String = "",
+    val timestamp: com.google.firebase.Timestamp? = null,
+    val type: String = "text",
+    val isRead: Boolean = false,
+    val codeLanguage: String? = null
+)

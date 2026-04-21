@@ -26,10 +26,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.sahil.peerlearn.ui.theme.*
 import com.google.firebase.auth.FirebaseUser
 import java.util.Calendar
@@ -45,97 +53,277 @@ fun HomeScreen(
     onNotificationsClick: () -> Unit,
     viewModel: HomeViewModel = viewModel(factory = object : androidx.lifecycle.ViewModelProvider.Factory {
         override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-            return HomeViewModel(HomeRepository(), UserRepository()) as T
+            return HomeViewModel(HomeRepository(UserRepository())) as T
         }
     })
 ) {
     val context = LocalContext.current
     val currentUser by viewModel.currentUser.collectAsState()
-    val recommendedPeers by viewModel.recommendedPeers.collectAsState()
+    val recommendedPeers by viewModel.recommendedPeersWithMatch.collectAsState()
     val allPeers by viewModel.allPeers.collectAsState()
     val unreadCount by viewModel.unreadCount.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    var skillSearchQuery by remember { mutableStateOf("") }
+
+    val filteredRecommendedPeers = remember(recommendedPeers, currentUser, skillSearchQuery) {
+        val query = skillSearchQuery.trim()
+        if (query.isEmpty()) {
+            recommendedPeers
+        } else {
+            recommendedPeers.filter { (peer, _) ->
+                peer.teachSkills.any { it.contains(query, ignoreCase = true) } ||
+                    peer.learnSkills.any { it.contains(query, ignoreCase = true) } ||
+                    currentUser?.teachSkills?.any { it.contains(query, ignoreCase = true) && peer.learnSkills.contains(it) } == true ||
+                    currentUser?.learnSkills?.any { it.contains(query, ignoreCase = true) && peer.teachSkills.contains(it) } == true
+            }
+        }
+    }
 
     LaunchedEffect(user.uid) {
         viewModel.initHome(user.uid)
     }
 
-    Scaffold(
-        containerColor = SpaceBlack,
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            HomeTopBar(
-                unreadCount = unreadCount,
-                onSearchClick = onSearchClick,
-                onNotificationClick = onNotificationsClick
-            )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(SpaceBlack)
-        ) {
-            // Purple glow at top center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val isCompact = this.maxWidth < 360.dp
+        val horizontalPadding = if (isCompact) 16.dp else 24.dp
+        val topGlowWidth = this.maxWidth * 1.15f
+        val topGlowHeight = if (isCompact) 220.dp else 300.dp
+
+
+        Scaffold(
+            containerColor = SpaceBlack,
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                HomeTopBar(
+                    unreadCount = unreadCount,
+                    onSearchClick = onSearchClick,
+                    onNotificationClick = onNotificationsClick,
+                    horizontalPadding = horizontalPadding,
+                    isCompact = isCompact
+                )
+            }
+        ) { padding ->
             Box(
                 modifier = Modifier
-                    .size(450.dp, 300.dp)
-                    .align(Alignment.TopCenter)
-                    .background(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                PurpleGlow.copy(alpha = 0.35f),
-                                Color.Transparent
+                    .fillMaxSize()
+                    .background(SpaceBlack)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(topGlowWidth)
+                        .height(topGlowHeight)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    PurpleGlow.copy(alpha = 0.35f),
+                                    Color.Transparent
+                                )
                             )
                         )
-                    )
-            )
-
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(bottom = 24.dp)
-            ) {
-            // Section 2: Greeting Card
-            item {
-                GreetingCard(
-                    user = currentUser ?: UserProfile(name = user.displayName ?: "Peer"),
-                    onProfileClick = onProfileClick
                 )
-            }
 
-            // Section 3: Search Bar
-            item {
-                HomeSearchBar(onClick = onSearchClick)
-            }
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentPadding = PaddingValues(bottom = if (isCompact) 16.dp else 24.dp)
+                ) {
+                    // Section 2: Greeting Card
+                    item {
+                        GreetingCard(
+                            user = currentUser ?: UserProfile(name = user.displayName ?: "Peer"),
+                            onProfileClick = onProfileClick,
+                            horizontalPadding = horizontalPadding,
+                            isCompact = isCompact
+                        )
+                    }
 
-            // Section 4: Recommended Peers
-            item {
-                SectionHeader(
-                    title = "Peers For You 🎯",
-                    onSeeAllClick = { /* TODO */ }
-                )
-            }
-            
-            item {
-                if (uiState is HomeUiState.Loading) {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(3) { ShimmerPeerCard(isVertical = false) }
+                    // Section 3: Search Bar
+                    item {
+                        HomeSearchBar(
+                            onClick = onSearchClick,
+                            horizontalPadding = horizontalPadding,
+                            isCompact = isCompact,
+                            skillSearchQuery = skillSearchQuery,
+                            onSkillSearchQueryChange = { skillSearchQuery = it }
+                        )
                     }
-                } else if (currentUser != null && currentUser!!.learnSkills.isEmpty()) {
-                    Box(modifier = Modifier.padding(horizontal = 24.dp)) {
-                        RecommendedEmptyState(onUpdateProfile = onProfileClick)
+
+                    // Section 4: Recommended Peers
+                    if (filteredRecommendedPeers.isNotEmpty()) {
+                        item {
+                            SectionHeader(
+                                title = "Recommended For You ✨",
+                                onSeeAllClick = { /* TODO */ },
+                                horizontalPadding = horizontalPadding,
+                                isCompact = isCompact
+                            )
+                        }
+
+                        item {
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(filteredRecommendedPeers) { (peer, match) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .width(280.dp)
+                                            .background(Color(0xFF1A1A2E), RoundedCornerShape(16.dp))
+                                            .border(0.5.dp, Color(0x407C4DFF), RoundedCornerShape(16.dp))
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        // Avatar
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .background(Color(0xFF2d1f5e), RoundedCornerShape(14.dp)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = peer.name.take(2).uppercase(),
+                                                color = Color(0xFFa78bfa),
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        // Info
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                peer.name,
+                                                color = Color(0xFFf0eeff),
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                "// ${peer.teachSkills.firstOrNull() ?: "Developer"}",
+                                                color = Color(0xCC7C4DFF),
+                                                fontSize = 10.sp,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                            Spacer(Modifier.height(4.dp))
+                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                peer.teachSkills.take(2).forEach { skill ->
+                                                    Text(
+                                                        skill,
+                                                        modifier = Modifier
+                                                            .background(Color(0x267C4DFF), RoundedCornerShape(4.dp))
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                                                        color = Color(0xFFa78bfa),
+                                                        fontSize = 9.sp,
+                                                        fontFamily = FontFamily.Monospace
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        // Buttons
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            val connectionStatus by viewModel
+                                                .getConnectionStatus(user.uid, peer.uid)
+                                                .collectAsState(initial = "none")
+
+                                            when (connectionStatus) {
+                                                "none" -> {
+                                                    Button(
+                                                        onClick = { viewModel.sendConnectionRequest(user.uid, peer.uid) },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                                        modifier = Modifier.height(32.dp)
+                                                    ) {
+                                                        Text("Connect", fontSize = 11.sp)
+                                                    }
+                                                }
+                                                "pending" -> {
+                                                    Button(
+                                                        onClick = {},
+                                                        enabled = false,
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF444444)),
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                                        modifier = Modifier.height(32.dp)
+                                                    ) {
+                                                        Text("Pending...", fontSize = 11.sp, color = Color.LightGray)
+                                                    }
+                                                }
+                                                "connected" -> {
+                                                    Button(
+                                                        onClick = { onChatClick(peer.uid) },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1a5c38)),
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                                        modifier = Modifier.height(32.dp)
+                                                    ) {
+                                                        Text("Message", fontSize = 11.sp)
+                                                    }
+                                                }
+                                            }
+                                            OutlinedButton(
+                                                onClick = { onPeerClick(peer.uid) },
+                                                border = BorderStroke(1.dp, Color(0x597C4DFF)),
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                                modifier = Modifier.height(32.dp)
+                                            ) {
+                                                Text("Profile", fontSize = 11.sp, color = Color(0xFFc4a8ff))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        item { Spacer(Modifier.height(16.dp)) }
+                    } else if (uiState is HomeUiState.Loading) {
+                        item {
+                            SectionHeader(
+                                title = "Finding Peers... 🎯",
+                                onSeeAllClick = { },
+                                horizontalPadding = horizontalPadding,
+                                isCompact = isCompact
+                            )
+                        }
+                        item {
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = horizontalPadding),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                items(3) { ShimmerPeerCard(isVertical = false, compact = isCompact) }
+                            }
+                        }
+                        item { Spacer(Modifier.height(16.dp)) }
                     }
-                } else {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(recommendedPeers) { peer ->
+
+                    // Section 5: All Peers
+                    item {
+                        SectionHeader(
+                            title = "All Peers 👥",
+                            onSeeAllClick = { /* TODO */ },
+                            horizontalPadding = horizontalPadding,
+                            isCompact = isCompact
+                        )
+                    }
+
+                    if (uiState is HomeUiState.Loading) {
+                        items(5) {
+                            Box(modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 8.dp)) {
+                                ShimmerPeerCard(isVertical = true, compact = isCompact)
+                            }
+                        }
+                    } else if (allPeers.isEmpty()) {
+                        item {
+                            EmptyStateCard(
+                                message = "Be the first peer! 🚀",
+                                modifier = Modifier.padding(horizontal = horizontalPadding)
+                            )
+                        }
+                    } else {
+                        items(allPeers) { peer ->
                             val interactionSource = remember { MutableInteractionSource() }
                             val isPressed by interactionSource.collectIsPressedAsState()
                             val scale by animateFloatAsState(
@@ -144,98 +332,54 @@ fun HomeScreen(
                                 label = "card_click"
                             )
 
-                            val matchedSkill = peer.teachSkills.firstOrNull { skill ->
-                                currentUser?.learnSkills?.contains(skill) == true
-                            } ?: peer.teachSkills.firstOrNull() ?: "Skills"
-
-                            PeerCard(
-                                user = peer,
-                                onClick = { onPeerClick(peer.uid) },
-                                onActionClick = { onPeerClick(peer.uid) },
-                                actionText = "Connect",
-                                isVertical = false,
-                                matchedSkill = matchedSkill,
-                                modifier = Modifier
-                                    .scale(scale)
-                                    .clickable(
-                                        interactionSource = interactionSource,
-                                        indication = null
-                                    ) { onPeerClick(peer.uid) }
-                            )
+                            Box(modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 4.dp)) {
+                                PeerCard(
+                                    user = peer,
+                                    onViewProfile = { onPeerClick(peer.uid) },
+                                    onConnectClick = { onChatClick(peer.uid) },
+                                    isOnline = true,
+                                    currentUid = user.uid,
+                                    viewModel = viewModel,
+                                    modifier = Modifier
+                                        .scale(scale)
+                                        .clickable(
+                                            interactionSource = interactionSource,
+                                            indication = null
+                                        ) { onPeerClick(peer.uid) }
+                                )
+                            }
                         }
-                    }
-                }
-            }
-
-            // Section 5: All Peers
-            item {
-                SectionHeader(
-                    title = "All Peers 👥",
-                    onSeeAllClick = { /* TODO */ }
-                )
-            }
-
-            if (uiState is HomeUiState.Loading) {
-                items(5) {
-                    Box(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-                        ShimmerPeerCard(isVertical = true)
-                    }
-                }
-            } else if (allPeers.isEmpty()) {
-                item {
-                    EmptyStateCard(
-                        message = "Be the first peer! 🚀",
-                        modifier = Modifier.padding(horizontal = 24.dp)
-                    )
-                }
-            } else {
-                items(allPeers) { peer ->
-                    val interactionSource = remember { MutableInteractionSource() }
-                    val isPressed by interactionSource.collectIsPressedAsState()
-                    val scale by animateFloatAsState(
-                        targetValue = if (isPressed) 0.98f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-                        label = "card_click"
-                    )
-
-                    Box(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-                        PeerCard(
-                            user = peer,
-                            onClick = { onPeerClick(peer.uid) },
-                            onActionClick = { onChatClick(peer.uid) },
-                            actionText = "Chat",
-                            isVertical = true,
-                            onViewProfile = { onPeerClick(peer.uid) },
-                            modifier = Modifier
-                                .scale(scale)
-                                .clickable(
-                                    interactionSource = interactionSource,
-                                    indication = null
-                                ) { onPeerClick(peer.uid) }
-                        )
                     }
                 }
             }
         }
     }
 }
-}
 
 @Composable
-fun HomeTopBar(unreadCount: Int, onSearchClick: () -> Unit, onNotificationClick: () -> Unit) {
+fun HomeTopBar(
+    unreadCount: Int,
+    onSearchClick: () -> Unit,
+    onNotificationClick: () -> Unit,
+    horizontalPadding: Dp = 24.dp,
+    isCompact: Boolean = false
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .padding(horizontal = horizontalPadding, vertical = if (isCompact) 12.dp else 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = "PeerLearn",
-            fontSize = 26.sp,
+            fontSize = if (isCompact) 22.sp else 26.sp,
             fontWeight = FontWeight.Black,
-            color = Color.White
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
         )
         
         Row {
@@ -263,7 +407,12 @@ fun HomeTopBar(unreadCount: Int, onSearchClick: () -> Unit, onNotificationClick:
 }
 
 @Composable
-fun GreetingCard(user: UserProfile, onProfileClick: () -> Unit) {
+fun GreetingCard(
+    user: UserProfile,
+    onProfileClick: () -> Unit,
+    horizontalPadding: Dp = 24.dp,
+    isCompact: Boolean = false
+) {
     val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
     val greeting = when {
         hour < 12 -> "Good Morning"
@@ -279,7 +428,7 @@ fun GreetingCard(user: UserProfile, onProfileClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .padding(horizontal = horizontalPadding, vertical = if (isCompact) 12.dp else 16.dp),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
@@ -291,50 +440,22 @@ fun GreetingCard(user: UserProfile, onProfileClick: () -> Unit) {
                         colors = listOf(PurpleGlow, PurpleAccent)
                     )
                 )
-                .padding(24.dp)
+                .padding(if (isCompact) 16.dp else 24.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "$greeting ${user.name}! $emoji",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Find your perfect learning peer",
-                        fontSize = 14.sp,
-                        color = Color.White.copy(alpha = 0.9f)
-                    )
+            if (isCompact) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    GreetingTextBlock(greeting = greeting, name = user.name, emoji = emoji, isCompact = true)
+                    GreetingAvatar(user = user, onProfileClick = onProfileClick, isCompact = true)
                 }
-                
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.2f))
-                            .clickable { onProfileClick() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = user.name.firstOrNull()?.toString()?.uppercase() ?: "?",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 22.sp
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "🔥 7 day streak",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    GreetingTextBlock(greeting = greeting, name = user.name, emoji = emoji, isCompact = false, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(12.dp))
+                    GreetingAvatar(user = user, onProfileClick = onProfileClick, isCompact = false)
                 }
             }
         }
@@ -342,18 +463,93 @@ fun GreetingCard(user: UserProfile, onProfileClick: () -> Unit) {
 }
 
 @Composable
-fun HomeSearchBar(onClick: () -> Unit) {
+private fun GreetingTextBlock(
+    greeting: String,
+    name: String,
+    emoji: String,
+    isCompact: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = "$greeting $name! $emoji",
+            fontSize = if (isCompact) 18.sp else 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            maxLines = if (isCompact) 2 else 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = "Find your perfect learning peer",
+            fontSize = 14.sp,
+            color = Color.White.copy(alpha = 0.9f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun GreetingAvatar(user: UserProfile, onProfileClick: () -> Unit, isCompact: Boolean) {
+    Column(horizontalAlignment = if (isCompact) Alignment.Start else Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(if (isCompact) 52.dp else 56.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.2f))
+                .clickable { onProfileClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            if (user.profileImageUrl.isNotBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(user.profileImageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Profile Picture",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            } else {
+                Text(
+                    text = user.name.firstOrNull()?.toString()?.uppercase() ?: "?",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = if (isCompact) 20.sp else 22.sp
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "🔥 7 day streak",
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+fun HomeSearchBar(
+    onClick: () -> Unit,
+    horizontalPadding: Dp = 24.dp,
+    isCompact: Boolean = false,
+    skillSearchQuery: String,
+    onSkillSearchQueryChange: (String) -> Unit
+) {
     val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 8.dp),
+            .padding(horizontal = horizontalPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp)
+                .height(if (isCompact) 44.dp else 48.dp)
                 .clickable { onClick() },
             shape = RoundedCornerShape(24.dp),
             color = SpaceSurface,
@@ -362,7 +558,7 @@ fun HomeSearchBar(onClick: () -> Unit) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = if (isCompact) 16.dp else 20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -372,10 +568,23 @@ fun HomeSearchBar(onClick: () -> Unit) {
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(12.dp))
-                Text(
-                    text = "Search by skill...",
-                    color = Color(0xFF9E9E9E),
-                    fontSize = 14.sp
+                BasicTextField(
+                    value = skillSearchQuery,
+                    onValueChange = onSkillSearchQueryChange,
+                    textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { innerTextField ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (skillSearchQuery.isEmpty()) {
+                                Text(
+                                    text = "Search by skill...",
+                                    color = Color(0xFF9E9E9E),
+                                    fontSize = 14.sp
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
                 )
             }
         }
@@ -385,7 +594,7 @@ fun HomeSearchBar(onClick: () -> Unit) {
         IconButton(
             onClick = { Toast.makeText(context, "Filters coming soon!", Toast.LENGTH_SHORT).show() },
             modifier = Modifier
-                .size(48.dp)
+                .size(if (isCompact) 44.dp else 48.dp)
                 .background(PurpleAccent, CircleShape)
         ) {
             Icon(
@@ -399,20 +608,29 @@ fun HomeSearchBar(onClick: () -> Unit) {
 }
 
 @Composable
-fun SectionHeader(title: String, onSeeAllClick: () -> Unit) {
+fun SectionHeader(
+    title: String,
+    onSeeAllClick: () -> Unit,
+    horizontalPadding: Dp = 24.dp,
+    isCompact: Boolean = false
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .padding(horizontal = horizontalPadding, vertical = if (isCompact) 12.dp else 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = title,
-            fontSize = 18.sp,
+            fontSize = if (isCompact) 16.sp else 18.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = Color.White,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
+        Spacer(Modifier.width(12.dp))
         Text(
             text = "See all →",
             color = PurpleAccent,
@@ -472,14 +690,14 @@ fun EmptyStateCard(message: String, modifier: Modifier = Modifier) {
                 text = message,
                 color = Color(0xFF9E9E9E),
                 fontSize = 14.sp,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                textAlign = TextAlign.Center
             )
         }
     }
 }
 
 @Composable
-fun ShimmerPeerCard(isVertical: Boolean) {
+fun ShimmerPeerCard(isVertical: Boolean, compact: Boolean = false) {
     val transition = rememberInfiniteTransition(label = "shimmer")
     val translateAnim by transition.animateFloat(
         initialValue = 0f,
@@ -505,7 +723,7 @@ fun ShimmerPeerCard(isVertical: Boolean) {
 
     Card(
         modifier = Modifier
-            .then(if (isVertical) Modifier.fillMaxWidth() else Modifier.width(260.dp)),
+            .then(if (isVertical) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().widthIn(max = if (compact) 320.dp else 360.dp)),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         border = BorderStroke(1.dp, Color(0xFF2A2A3D))

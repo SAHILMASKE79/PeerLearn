@@ -1,52 +1,54 @@
 package com.sahil.peerlearn
 
+import android.Manifest
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.sahil.peerlearn.ui.theme.*
-import com.google.firebase.Timestamp
+import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
+import com.sahil.peerlearn.ui.theme.*
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.FileProvider
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     peerUid: String,
@@ -60,47 +62,54 @@ fun ChatScreen(
 
     var messageText by remember { mutableStateOf("") }
     var showCodeDialog by remember { mutableStateOf(false) }
-    var selectedLanguage by remember { mutableStateOf("Kotlin") }
-    var codeText by remember { mutableStateOf("") }
-    var showMoreMenu by remember { mutableStateOf(false) }
+    var showAttachmentSheet by remember { mutableStateOf(false) }
+    var showSessionDialog by remember { mutableStateOf(false) }
+    var sessionTopic by remember { mutableStateOf("") }
 
     val messages by viewModel.messages.collectAsState()
     val isPeerTyping by viewModel.isPeerTyping.collectAsState()
     val peerProfile by viewModel.peerProfile.collectAsState()
-    val listState = rememberLazyListState()
+    val activeSession by viewModel.activeSession.collectAsState()
+    val timerSeconds by viewModel.timerSeconds.collectAsState()
+    val uploadProgress by viewModel.uploadProgress.collectAsState()
+
     val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    val screenWidth = configuration.screenWidthDp.dp
-    val coroutineScope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
+    val listState = rememberLazyListState()
 
-    var replyingTo by remember { mutableStateOf<Message?>(null) }
-    var selectedMessage by remember { mutableStateOf<Message?>(null) }
-    var showMessageOptions by remember { mutableStateOf(false) }
+    var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
 
-    val showScrollButton by remember {
-        derivedStateOf {
-            val layoutInfo = listState.layoutInfo
-            val visibleItemsInfo = layoutInfo.visibleItemsInfo
-            if (visibleItemsInfo.isEmpty()) {
-                false
-            } else {
-                val lastVisibleItem = visibleItemsInfo.last()
-                lastVisibleItem.index < layoutInfo.totalItemsCount - 3
-            }
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.uploadImage(chatId, currentUid, peerUid, it) }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            cameraImageUri?.let { viewModel.uploadImage(chatId, currentUid, peerUid, it) }
         }
     }
 
-    val keyboardState by rememberUpdatedState(WindowInsets.isImeVisible)
+    fun createImageUri(): Uri {
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val storageDir = context.cacheDir
+        val file = File.createTempFile("JPEG_${timeStamp}_", ".jpg", storageDir)
+        return FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+    }
 
-    LaunchedEffect(keyboardState) {
-        if (keyboardState && messages.isNotEmpty()) {
-            delay(100)
-            val totalItems = listState.layoutInfo.totalItemsCount
-            if (totalItems > 0) {
-                listState.animateScrollToItem(totalItems - 1)
-            }
-        }
+    LaunchedEffect(chatId) {
+        viewModel.loadMessages(chatId)
+        viewModel.observeTyping(chatId, peerUid)
+        viewModel.markMessagesAsRead(chatId, currentUid)
+        viewModel.loadPeerProfile(peerUid)
+        viewModel.observeSession(chatId)
     }
 
     LaunchedEffect(messages.size) {
@@ -109,563 +118,489 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(isPeerTyping) {
-        if (isPeerTyping) {
-            delay(100)
-            val totalItems = listState.layoutInfo.totalItemsCount
-            if (totalItems > 0) {
-                listState.animateScrollToItem(totalItems - 1)
-            }
-        }
-    }
-
-    LaunchedEffect(chatId) {
-        viewModel.loadMessages(chatId)
-        viewModel.observeTyping(chatId, peerUid)
-        viewModel.markMessagesAsRead(chatId, currentUid)
-        viewModel.loadPeerProfile(peerUid)
-    }
-
-    val avatarColor = remember(peerProfile?.name) { getAvatarColorFromChat(peerProfile?.name ?: "") }
-
+    var selectedImageUrl by remember { mutableStateOf<String?>(null) }
+    
     Box(modifier = Modifier.fillMaxSize().background(SpaceBlack)) {
-        // Standard Space Theme Glow
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .size(450.dp, 300.dp)
-                .background(
-                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                        colors = listOf(
-                            PurpleGlow.copy(alpha = 0.35f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
-        Canvas(Modifier.fillMaxSize()) {
-            val patternColor = Color(0xFF252525).copy(alpha = 0.5f)
-            for (x in 0..size.width.toInt() step 60) {
-                for (y in 0..size.height.toInt() step 60) {
-                    drawCircle(color = patternColor, radius = 1.5f, center = Offset(x.toFloat(), y.toFloat()))
-                }
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(SpaceSurface.copy(alpha = 0.9f))
-                    .statusBarsPadding()
-                    .padding(4.dp, 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Default.ArrowBack, tint = Color.White, modifier = Modifier.size(22.dp), contentDescription = "Back")
-                }
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(avatarColor)
-                        .clickable { navController.navigate("peer_profile/${peerUid}") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        peerProfile?.name?.firstOrNull()?.uppercase() ?: "?",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { navController.navigate("peer_profile/${peerUid}") }
-                ) {
-                    Text(
-                        peerProfile?.name ?: "Loading...",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (isPeerTyping) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "typing",
-                                color = Color(0xFF4DCA5D),
-                                fontSize = 12.sp,
-                                fontStyle = FontStyle.Italic
-                            )
-                            Row(
-                                modifier = Modifier.padding(start = 2.dp),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                val infiniteTransition = rememberInfiniteTransition(label = "typing")
-                                listOf(0, 200, 400).forEach { delay ->
-                                    val alpha by infiniteTransition.animateFloat(
-                                        initialValue = 0.2f,
-                                        targetValue = 1f,
-                                        animationSpec = infiniteRepeatable(
-                                            animation = tween(600, delay),
-                                            repeatMode = RepeatMode.Reverse
-                                        ),
-                                        label = "alpha"
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .size(3.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF4DCA5D).copy(alpha = alpha))
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        Text("online", color = Color(0xFF4DCA5D), fontSize = 12.sp)
-                    }
-                }
-                IconButton(onClick = {
-                    Toast.makeText(context, "Voice call coming soon!", Toast.LENGTH_SHORT).show()
-                }) {
-                    Icon(Icons.Default.Call, tint = PurpleAccent, modifier = Modifier.size(22.dp), contentDescription = "Call")
-                }
-                Box {
-                    IconButton(onClick = { showMoreMenu = true }) {
-                        Icon(Icons.Default.MoreVert, tint = Color.White, modifier = Modifier.size(22.dp), contentDescription = "More")
-                    }
-                    DropdownMenu(
-                        expanded = showMoreMenu,
-                        onDismissRequest = { showMoreMenu = false },
-                        modifier = Modifier.background(SpaceSurface)
+        Column(modifier = Modifier.fillMaxSize().imePadding()) {
+            TopAppBar(
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        listOf(
-                            "View Profile" to { navController.navigate("peer_profile/$peerUid") },
-                            "Share Code" to { showCodeDialog = true },
-                            "Clear Chat" to { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() },
-                            "Block User" to { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() }
-                        ).forEach { (label, action) ->
-                            DropdownMenuItem(
-                                text = { Text(label, color = Color.White) },
-                                onClick = {
-                                    action()
-                                    showMoreMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 8.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
-                    messages.groupBy { formatDate(it.timestamp) }.forEach { (date, msgs) ->
-                        item { DateSeparator(date) }
-                        items(msgs) { msg ->
-                            val isMe = msg.senderId == currentUid
-                            MessageRow(
-                                msg = msg,
-                                isMe = isMe,
-                                avatarColor = avatarColor,
-                                peerName = peerProfile?.name ?: "",
-                                screenWidth = screenWidth,
-                                onLongPress = {
-                                    selectedMessage = msg
-                                    showMessageOptions = true
-                                }
-                            )
-                            Spacer(Modifier.height(4.dp))
-                        }
-                    }
-                    item {
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = isPeerTyping,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically()
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF2d1f5e)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            TypingIndicator(avatarColor, peerProfile?.name ?: "")
+                            if (peerProfile?.profileImageUrl?.isNotEmpty() == true) {
+                                AsyncImage(
+                                    model = peerProfile?.profileImageUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Text(
+                                    text = peerProfile?.name?.take(2)?.uppercase() ?: "??",
+                                    color = Color(0xFFa78bfa),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = peerProfile?.name ?: "Chat",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            if (isPeerTyping) {
+                                Text(
+                                    "typing...",
+                                    color = Color(0xFF4ade80),
+                                    fontSize = 11.sp
+                                )
+                            }
                         }
                     }
-                }
-
-                // Scroll-to-bottom Floating Action Button
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showScrollButton,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 16.dp, end = 16.dp),
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut() + scaleOut()
-                ) {
-                    FloatingActionButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                val totalItems = listState.layoutInfo.totalItemsCount
-                                if (totalItems > 0) {
-                                    listState.animateScrollToItem(totalItems - 1)
-                                }
-                            }
-                        },
-                        containerColor = PurpleAccent,
-                        shape = CircleShape,
-                        modifier = Modifier.size(44.dp),
-                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
-                    ) {
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
                         Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Scroll to bottom",
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            "Back",
                             tint = Color.White
                         )
                     }
-                }
-            }
-
-            if (replyingTo != null) {
-                ReplyPreview(replyingTo!!) { replyingTo = null }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(SpaceSurface)
-                    .padding(8.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                IconButton(onClick = {
-                    Toast.makeText(context, "Attachments coming soon!", Toast.LENGTH_SHORT).show()
-                }) {
-                    Icon(Icons.Default.AttachFile, tint = Color(0xFF9E9E9E), modifier = Modifier.size(22.dp), contentDescription = null)
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(SpaceBlack, RoundedCornerShape(24.dp))
-                        .padding(horizontal = 4.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextField(
-                            value = messageText,
-                            onValueChange = { text ->
-                                messageText = text
-                                viewModel.onTextChanged(text, chatId, currentUid)
-                            },
-                            modifier = Modifier.weight(1f),
-                            placeholder = { Text("Message...", color = Color(0xFF9E9E9E)) },
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            ),
-                            maxLines = 5
+                },
+                actions = {
+                    IconButton(onClick = { showSessionDialog = true }) {
+                        Icon(
+                            Icons.Default.Timer,
+                            "Study Session",
+                            tint = Color(0xFF7C4DFF)
                         )
-                        IconButton(onClick = {}) {
-                            Icon(Icons.Default.EmojiEmotions, tint = Color(0xFF9E9E9E), modifier = Modifier.size(20.dp), contentDescription = null)
-                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF1A1A2E)
+                )
+            )
+
+            activeSession?.let { session ->
+                StudySessionBanner(
+                    session = session,
+                    timerSeconds = timerSeconds,
+                    onEnd = { viewModel.endSession(session.sessionId) },
+                    onTopicChange = { viewModel.updateSessionTopic(session.sessionId, it) },
+                    onTogglePause = { viewModel.toggleSessionStatus(session.sessionId) }
+                )
+            }
+
+            Box(modifier = Modifier.weight(1f)) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(messages) { msg ->
+                        MessageBubble(
+                            message = msg,
+                            isMe = msg.senderId == currentUid,
+                            onCopyCode = {
+                                clipboardManager.setText(AnnotatedString(msg.codeSnippet))
+                                Toast.makeText(context, "Code copied!", Toast.LENGTH_SHORT).show()
+                            },
+                            onImageClick = {
+                                selectedImageUrl = it
+                            }
+                        )
                     }
                 }
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .background(
-                            if (messageText.isNotEmpty()) PurpleAccent else SpaceBlack,
-                            CircleShape
-                        )
-                        .clickable {
-                            if (messageText.isNotBlank()) {
-                                viewModel.setTyping(chatId, currentUid, false)
-                                viewModel.sendTextMessage(
-                                    currentUid, peerUid, messageText,
-                                    replyToId = replyingTo?.id ?: "",
-                                    replyToText = replyingTo?.message ?: ""
-                                )
-                                messageText = ""
-                                replyingTo = null
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (messageText.isNotEmpty()) Icons.Default.Send else Icons.Default.Mic,
-                        contentDescription = null,
-                        tint = if (messageText.isNotEmpty()) Color.White else Color(0xFF9E9E9E),
-                        modifier = Modifier.size(22.dp)
+                
+                if (uploadProgress != null) {
+                    LinearProgressIndicator(
+                        progress = { uploadProgress!! },
+                        modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter),
+                        color = PurpleAccent,
+                        trackColor = Color.White.copy(0.1f)
                     )
                 }
+            }
+
+            ChatInputBar(
+                messageText = messageText,
+                onValueChange = { 
+                    messageText = it
+                    viewModel.onTextChanged(it, chatId, currentUid)
+                },
+                onSend = {
+                    if (messageText.isNotBlank()) {
+                        viewModel.sendTextMessage(currentUid, peerUid, messageText)
+                        messageText = ""
+                    }
+                },
+                onAttachClick = { showAttachmentSheet = true },
+                onCodeClick = { showCodeDialog = true }
+            )
+        }
+    }
+
+    if (showAttachmentSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showAttachmentSheet = false },
+            containerColor = SpaceSurface
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                ListItem(
+                    headlineContent = { Text("Camera", color = Color.White) },
+                    leadingContent = { Icon(Icons.Default.CameraAlt, null, tint = PurpleAccent) },
+                    modifier = Modifier.clickable {
+                        showAttachmentSheet = false
+                        val uri = createImageUri()
+                        cameraImageUri = uri
+                        cameraLauncher.launch(uri)
+                    }
+                )
+                ListItem(
+                    headlineContent = { Text("Gallery", color = Color.White) },
+                    leadingContent = { Icon(Icons.Default.PhotoLibrary, null, tint = PurpleAccent) },
+                    modifier = Modifier.clickable {
+                        showAttachmentSheet = false
+                        galleryLauncher.launch("image/*")
+                    }
+                )
             }
         }
     }
 
-    if (showMessageOptions && selectedMessage != null) {
+    if (showSessionDialog) {
         AlertDialog(
-            onDismissRequest = { showMessageOptions = false },
+            onDismissRequest = { showSessionDialog = false },
             containerColor = SpaceSurface,
+            title = { Text("Start Study Session", color = Color.White) },
             text = {
-                Column {
-                    val options = listOf(
-                        "Reply" to { replyingTo = selectedMessage; showMessageOptions = false },
-                        "Copy" to { clipboardManager.setText(AnnotatedString(selectedMessage!!.message)); showMessageOptions = false },
-                        "Forward" to { Toast.makeText(context, "Coming soon", Toast.LENGTH_SHORT).show(); showMessageOptions = false },
-                        "Delete" to { if (selectedMessage!!.senderId == currentUid) viewModel.deleteMessage(selectedMessage!!.id); showMessageOptions = false }
-                    )
-                    options.forEach { (label, action) ->
-                        Text(
-                            label,
-                            color = Color.White,
-                            modifier = Modifier.fillMaxWidth().clickable { action() }.padding(16.dp),
-                            fontSize = 16.sp
-                        )
-                    }
-                }
+                OutlinedTextField(
+                    value = sessionTopic,
+                    onValueChange = { sessionTopic = it },
+                    label = { Text("Topic", color = Color.Gray) },
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
             },
-            confirmButton = {}
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.startSession(chatId, sessionTopic)
+                    showSessionDialog = false
+                }, colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent)) {
+                    Text("Start")
+                }
+            }
         )
     }
 
     if (showCodeDialog) {
-        AlertDialog(
-            onDismissRequest = { showCodeDialog = false },
-            containerColor = SpaceSurface,
-            title = { Text("Share Code 💻", color = Color.White) },
-            text = {
-                Column {
-                    var expanded by remember { mutableStateOf(false) }
-                    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-                        OutlinedTextField(
-                            value = selectedLanguage,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Language", color = Color.Gray) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = PurpleAccent
-                            )
-                        )
-                        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            listOf("Kotlin", "Python", "Java", "C++", "JavaScript", "Other").forEach { lang ->
-                                DropdownMenuItem(text = { Text(lang) }, onClick = { selectedLanguage = lang; expanded = false })
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = codeText,
-                        onValueChange = { codeText = it },
-                        modifier = Modifier.fillMaxWidth().height(200.dp),
-                        placeholder = { Text("Paste code here...", color = Color.Gray) },
-                        textStyle = TextStyle(fontFamily = FontFamily.Monospace, color = Color(0xFF00FF88)),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PurpleAccent
-                        )
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (codeText.isNotBlank()) {
-                            viewModel.sendCodeMessage(currentUid, peerUid, codeText, selectedLanguage)
-                            codeText = ""; showCodeDialog = false
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent)
-                ) { Text("Send 🚀") }
+        CodeSnippetDialog(
+            onDismiss = { showCodeDialog = false },
+            onSend = { code, lang ->
+                viewModel.sendCodeSnippet(currentUid, peerUid, code, lang)
+                showCodeDialog = false
             }
+        )
+    }
+
+    if (selectedImageUrl != null) {
+        FullScreenImageViewer(
+            imageUrl = selectedImageUrl!!,
+            onDismiss = { selectedImageUrl = null }
         )
     }
 }
 
 @Composable
-fun MessageRow(msg: Message, isMe: Boolean, avatarColor: Color, peerName: String, screenWidth: androidx.compose.ui.unit.Dp, onLongPress: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
-        verticalAlignment = Alignment.Bottom
+fun FullScreenImageViewer(imageUrl: String, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        if (!isMe) {
-            Box(
-                modifier = Modifier.size(28.dp).clip(CircleShape).background(avatarColor),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(peerName.firstOrNull()?.uppercase() ?: "?", color = Color.White, fontSize = 11.sp)
-            }
-            Spacer(Modifier.width(6.dp))
-        }
-
         Box(
             modifier = Modifier
-                .widthIn(min = 60.dp, max = screenWidth * 0.75f)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = if (isMe) 16.dp else 4.dp,
-                        topEnd = if (isMe) 4.dp else 16.dp,
-                        bottomStart = 16.dp,
-                        bottomEnd = 16.dp
-                    )
-                )
-                .background(if (isMe) PurpleGlow.copy(alpha = 0.8f) else SpaceSurface)
-                .let { 
-                    if (!isMe) it.border(1.dp, Color(0xFF2A2A3D), RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp))
-                    else it
-                }
-                .pointerInput(msg.id) { detectTapGestures(onLongPress = { onLongPress() }) }
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .fillMaxSize()
+                .background(Color.Black)
+                .clickable { onDismiss() }
         ) {
-            Column {
-                if (msg.replyToText.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(if (isMe) SpaceBlack.copy(0.4f) else SpaceBlack, RoundedCornerShape(6.dp))
-                            .padding(8.dp)
-                    ) {
-                        Text(msg.replyToText.take(60), color = PurpleAccent, fontSize = 12.sp, maxLines = 2)
-                    }
-                    Spacer(Modifier.height(4.dp))
-                }
-                
-                if (msg.type == "code") {
-                    Box(modifier = Modifier.background(Color.Black.copy(0.3f), RoundedCornerShape(4.dp)).padding(4.dp)) {
-                        Text(msg.language.uppercase(), color = PurpleAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Text(msg.message, color = Color(0xFF00FF88), fontFamily = FontFamily.Monospace, fontSize = 14.sp)
-                } else {
-                    Text(msg.message, color = Color.White, fontSize = 15.sp, lineHeight = 20.sp)
-                }
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+            ) {
+                Icon(Icons.Default.Close, "Close", tint = Color.White)
+            }
+        }
+    }
+}
 
-                Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                    Text(formatTime(msg.timestamp), color = if (isMe) Color.White.copy(0.6f) else Color(0xFF9E9E9E), fontSize = 11.sp)
-                    if (isMe) {
-                        Spacer(Modifier.width(3.dp))
-                        Icon(
-                            imageVector = when {
-                                msg.status == "sending" -> Icons.Default.Schedule
-                                msg.isRead -> Icons.Default.DoneAll
-                                else -> Icons.Default.Done
-                            },
-                            tint = if (msg.isRead) PurpleAccent else Color.White.copy(0.6f),
-                            modifier = Modifier.size(14.dp),
-                            contentDescription = null
+@Composable
+fun StudySessionBanner(
+    session: StudySession,
+    timerSeconds: Long,
+    onEnd: () -> Unit,
+    onTopicChange: (String) -> Unit,
+    onTogglePause: () -> Unit
+) {
+    var isEditingTopic by remember { mutableStateOf(false) }
+    var topicText by remember { mutableStateOf(session.topic) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .background(Color(0xFF1A1A2E))
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Timer, null, tint = PurpleAccent, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            formatTimer(timerSeconds),
+            color = if (session.status == "paused") Color.Gray else Color.White,
+            fontSize = 14.sp,
+            fontFamily = FontFamily.Monospace
+        )
+        
+        Spacer(Modifier.width(8.dp))
+        
+        IconButton(onClick = onTogglePause, modifier = Modifier.size(24.dp)) {
+            Icon(
+                imageVector = if (session.status == "active") Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = if (session.status == "active") "Pause" else "Resume",
+                tint = PurpleAccent,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+
+        Spacer(Modifier.width(8.dp))
+        
+        if (isEditingTopic) {
+            BasicTextField(
+                value = topicText,
+                onValueChange = { topicText = it },
+                textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = { 
+                onTopicChange(topicText)
+                isEditingTopic = false 
+            }) {
+                Icon(Icons.Default.Check, null, tint = PurpleAccent, modifier = Modifier.size(16.dp))
+            }
+        } else {
+            Text(
+                session.topic, 
+                color = Color.White, 
+                fontSize = 14.sp,
+                modifier = Modifier.weight(1f).clickable { isEditingTopic = true }
+            )
+        }
+
+        IconButton(onClick = onEnd) {
+            Icon(Icons.Default.Stop, null, tint = Color.Red, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+fun MessageBubble(
+    message: Message,
+    isMe: Boolean,
+    onCopyCode: () -> Unit,
+    onImageClick: (String) -> Unit
+) {
+    val bubbleColor = if (isMe) Color(0x337C4DFF) else Color(0xFF1A1A2E)
+    val borderColor = if (isMe) Color(0x597C4DFF) else Color(0x33FFFFFF)
+
+    val bubbleShape = if (isMe) {
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+    } else {
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.75f)
+                .wrapContentWidth(if (isMe) Alignment.End else Alignment.Start)
+                .clip(bubbleShape)
+                .background(bubbleColor)
+                .border(1.dp, borderColor, bubbleShape)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            when (message.type.lowercase()) {
+                "text" -> Text(
+                    text = message.text,
+                    color = if (isMe) Color(0xFFFFFFFF) else Color(0xFFE0E0E0),
+                    fontSize = 14.sp
+                )
+                "image" -> AsyncImage(
+                    model = message.imageUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 200.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onImageClick(message.imageUrl) },
+                    contentScale = ContentScale.Crop
+                )
+                "code" -> CodeMessageBubble(message, onCopyCode)
+                else -> Text(
+                    text = message.text,
+                    color = if (isMe) Color(0xFFFFFFFF) else Color(0xFFE0E0E0),
+                    fontSize = 14.sp
+                )
+            }
+        }
+        Text(
+            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(message.timestamp.toDate()),
+            color = Color.White.copy(alpha = 0.4f),
+            fontSize = 10.sp,
+            modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp)
+        )
+    }
+}
+
+@Composable
+fun CodeMessageBubble(message: Message, onCopy: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF0D0D1A), RoundedCornerShape(8.dp))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(message.codeLanguage.uppercase(), color = PurpleAccent, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+            IconButton(onClick = onCopy, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Default.ContentCopy, null, tint = Color.White.copy(0.6f), modifier = Modifier.size(14.dp))
+            }
+        }
+        Box(modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 200.dp)
+            .padding(8.dp)
+            .verticalScroll(rememberScrollState())
+            .horizontalScroll(rememberScrollState())
+        ) {
+            Text(
+                message.codeSnippet,
+                color = Color(0xFFE0E0E0),
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+    }
+}
+
+@Composable
+fun ChatInputBar(
+    messageText: String,
+    onValueChange: (String) -> Unit,
+    onSend: () -> Unit,
+    onAttachClick: () -> Unit,
+    onCodeClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SpaceSurface)
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onAttachClick) { Icon(Icons.Default.AttachFile, null, tint = PurpleAccent) }
+        IconButton(onClick = onCodeClick) { Icon(Icons.Default.Code, null, tint = PurpleAccent) }
+        
+        TextField(
+            value = messageText,
+            onValueChange = onValueChange,
+            modifier = Modifier.weight(1f),
+            placeholder = { Text("Message...", color = Color.Gray) },
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = SpaceBlack,
+                unfocusedContainerColor = SpaceBlack,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
+            shape = RoundedCornerShape(24.dp)
+        )
+
+        IconButton(onClick = onSend) {
+            Icon(Icons.AutoMirrored.Filled.Send, null, tint = PurpleAccent)
+        }
+    }
+}
+
+@Composable
+fun CodeSnippetDialog(onDismiss: () -> Unit, onSend: (String, String) -> Unit) {
+    var code by remember { mutableStateOf("") }
+    var language by remember { mutableStateOf("kotlin") }
+    val languages = listOf("kotlin", "java", "python", "javascript", "sql", "other")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SpaceSurface,
+        title = { Text("Share Code", color = Color.White) },
+        text = {
+            Column {
+                Text("Language:", color = Color.Gray, fontSize = 12.sp)
+                LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.height(100.dp)) {
+                    items(languages) { lang ->
+                        FilterChip(
+                            selected = language == lang,
+                            onClick = { language = lang },
+                            label = { Text(lang) },
+                            modifier = Modifier.padding(2.dp)
                         )
                     }
                 }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it },
+                    modifier = Modifier.fillMaxWidth().height(200.dp),
+                    textStyle = TextStyle(fontFamily = FontFamily.Monospace),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSend(code, language) }, colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent)) {
+                Text("Send Code")
             }
         }
-    }
-}
-
-@Composable
-fun DateSeparator(date: String) {
-    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-        Box(modifier = Modifier.background(Color.Black.copy(0.4f), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 4.dp)) {
-            Text(date, color = Color.White, fontSize = 12.sp)
-        }
-    }
-}
-
-@Composable
-fun TypingDotsSmall() {
-    val infiniteTransition = rememberInfiniteTransition(label = "typing")
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        listOf(0, 150, 300).forEach { delay ->
-            val alpha by infiniteTransition.animateFloat(
-                0.2f, 1f,
-                infiniteRepeatable(tween(400, delay), RepeatMode.Reverse),
-                label = "dot"
-            )
-            Text(".", color = Color(0xFF4DCA5D).copy(alpha = alpha), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-fun TypingIndicator(avatarColor: Color, peerName: String) {
-    val infiniteTransition = rememberInfiniteTransition(label = "dots")
-    Row(
-        modifier = Modifier.padding(vertical = 4.dp),
-        verticalAlignment = Alignment.Bottom
-    ) {
-        Box(
-            modifier = Modifier.size(28.dp).clip(CircleShape).background(avatarColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(peerName.firstOrNull()?.uppercase() ?: "?", color = Color.White, fontSize = 11.sp)
-        }
-        Spacer(Modifier.width(6.dp))
-        Box(
-            modifier = Modifier.background(
-                SpaceSurface,
-                RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
-            ).padding(14.dp, 12.dp)
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                listOf(0, 150, 300).forEach { delay ->
-                    val scale by infiniteTransition.animateFloat(
-                        0.6f, 1f,
-                        infiniteRepeatable(tween(400, delay), RepeatMode.Reverse),
-                        label = "dot"
-                    )
-                    Box(modifier = Modifier.size(8.dp).scale(scale).background(Color(0xFF9E9E9E), CircleShape))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ReplyPreview(msg: Message, onCancel: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().background(SpaceSurface).padding(12.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.width(2.dp).height(36.dp).background(PurpleAccent))
-        Spacer(Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text("Reply", color = PurpleAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text(msg.message.take(50), color = Color(0xFF9E9E9E), fontSize = 12.sp, maxLines = 1)
-        }
-        IconButton(onClick = onCancel) { Icon(Icons.Default.Close, tint = Color(0xFF9E9E9E), modifier = Modifier.size(18.dp), contentDescription = null) }
-    }
-}
-
-fun formatDate(timestamp: Timestamp): String {
-    val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-    return sdf.format(timestamp.toDate())
-}
-
-fun formatTime(timestamp: Timestamp): String {
-    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-    return sdf.format(timestamp.toDate())
-}
-
-fun getAvatarColorFromChat(name: String): Color {
-    if (name.isEmpty()) return Color(0xFF5B9BD5)
-    val colors = listOf(
-        Color(0xFFE57373), Color(0xFFF06292), Color(0xFFBA68C8), Color(0xFF9575CD),
-        Color(0xFF7986CB), Color(0xFF64B5F6), Color(0xFF4FC3F7), Color(0xFF4DD0E1),
-        Color(0xFF4DB6AC), Color(0xFF81C784), Color(0xFFAED581), Color(0xFFFF8A65)
     )
-    return colors[Math.abs(name.hashCode()) % colors.size]
+}
+
+fun formatTimer(seconds: Long): String {
+    val m = seconds / 60
+    val s = seconds % 60
+    return "%02d:%02d".format(m, s)
 }

@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseUser
@@ -27,16 +28,18 @@ fun EmailVerificationScreen(
     onRefresh: () -> Unit,
     onLogout: () -> Unit
 ) {
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(SpaceBlack)
     ) {
+        val isCompact = maxWidth < 360.dp
         // Radial Glow
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .size(400.dp, 280.dp)
+                .width(maxWidth * 1.05f)
+                .height(if (isCompact) 220.dp else 280.dp)
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
@@ -54,11 +57,12 @@ fun EmailVerificationScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(if (isCompact) 16.dp else 24.dp)
                     .fillMaxWidth()
+                    .widthIn(max = 480.dp)
                     .border(1.dp, PurpleGlow.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
                     .background(SpaceSurface.copy(0.75f), RoundedCornerShape(24.dp))
-                    .padding(32.dp),
+                    .padding(if (isCompact) 20.dp else 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -71,9 +75,11 @@ fun EmailVerificationScreen(
 
                 Text(
                     "Verify your email",
-                    fontSize = 24.sp,
+                    fontSize = if (isCompact) 20.sp else 24.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Text(

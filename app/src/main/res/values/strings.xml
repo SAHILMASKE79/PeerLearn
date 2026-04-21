@@ -1,6 +1,5 @@
 <resources>
     <string name="app_name">peerlearn</string>
-    <!-- Replace the value below with your actual Web Client ID from Firebase Console -->
-    <!-- Authentication > Sign-in method > Google > Web SDK configuration > Web client ID -->
-    <string name="default_web_client_id">YOUR_ACTUAL_CLIENT_ID_FROM_FIREBASE.apps.googleusercontent.com</string>
+    <!-- Copy this from Firebase Console > Auth > Google > Web SDK config -->
+    <string name="default_web_client_id">1034404319201-xxxxxxxxxxxxxxxx.apps.googleusercontent.com</string>
 </resources>

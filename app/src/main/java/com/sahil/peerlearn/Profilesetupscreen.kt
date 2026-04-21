@@ -17,6 +17,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.*
 import com.google.firebase.auth.auth
@@ -54,7 +56,8 @@ fun ProfileSetupScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    var name          by remember { mutableStateOf("") }
+    val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+    var name          by remember { mutableStateOf(auth.currentUser?.displayName ?: "") }
     var collegeName   by remember { mutableStateOf("") }
     var selectedYear  by remember { mutableStateOf("") }
     var bio           by remember { mutableStateOf("") }
@@ -85,16 +88,19 @@ fun ProfileSetupScreen(
     )
     */
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(SpaceBlack)
     ) {
-        // Radial Glow
+        val isCompact = maxWidth < 360.dp
+        val horizontalPadding = if (isCompact) 16.dp else 24.dp
+
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .size(450.dp, 300.dp)
+                .width(maxWidth * 1.15f)
+                .height(if (isCompact) 220.dp else 300.dp)
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
@@ -109,7 +115,7 @@ fun ProfileSetupScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 52.dp),
+                .padding(horizontal = horizontalPadding, vertical = if (isCompact) 32.dp else 52.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -122,7 +128,7 @@ fun ProfileSetupScreen(
             Spacer(Modifier.height(6.dp))
             Text(
                 "Set Up Your Profile",
-                fontSize = 26.sp,
+                fontSize = if (isCompact) 22.sp else 26.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
@@ -130,7 +136,8 @@ fun ProfileSetupScreen(
                 "Help peers find and connect with you",
                 fontSize = 13.sp,
                 color = TextSecondary,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 4.dp),
+                textAlign = TextAlign.Center
             )
 
             Spacer(Modifier.height(28.dp))
@@ -146,7 +153,8 @@ fun ProfileSetupScreen(
                     else -> "Step 3 of 3 — What you want to learn"
                 },
                 fontSize = 12.sp,
-                color = TextSecondary
+                color = TextSecondary,
+                textAlign = TextAlign.Center
             )
 
             Spacer(Modifier.height(24.dp))
@@ -353,8 +361,8 @@ fun StepSkillPicker(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
-        Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-        Text(subtitle, fontSize = 13.sp, color = TextSecondary)
+        Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(subtitle, fontSize = 13.sp, color = TextSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
 
         GlassCard {
             Column(Modifier.padding(16.dp)) {

@@ -16,27 +16,29 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun CoursesScreen() {
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF121212)),
         contentAlignment = Alignment.Center
     ) {
+        val isCompact = maxWidth < 360.dp
         Column(
+            modifier = Modifier.padding(if (isCompact) 16.dp else 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                 contentDescription = null,
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier.size(if (isCompact) 64.dp else 80.dp),
                 tint = Color(0xFF7C4DFF)
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "Courses Coming Soon! 🚀",
                 color = Color.White,
-                fontSize = 20.sp,
+                fontSize = if (isCompact) 18.sp else 20.sp,
                 fontWeight = FontWeight.Bold
             )
         }

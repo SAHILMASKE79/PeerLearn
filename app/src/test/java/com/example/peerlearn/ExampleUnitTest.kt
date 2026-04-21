@@ -1,4 +1,4 @@
-package com.example.peerlearn
+package com.sahil.peerlearn
 
 import org.junit.Test
 

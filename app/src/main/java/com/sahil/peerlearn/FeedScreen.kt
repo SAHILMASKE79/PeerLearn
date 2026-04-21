@@ -18,25 +18,30 @@ import com.sahil.peerlearn.ui.theme.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedScreen() {
-    Scaffold(
-        containerColor = SpaceBlack,
-        topBar = {
-            TopAppBar(
-                title = { Text("Knowledge Feed", color = Color.White) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SpaceSurface)
-            )
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(SpaceBlack)
-        ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val isCompact = maxWidth < 360.dp
+        val glowWidth = maxWidth * 1.15f
+
+        Scaffold(
+            containerColor = SpaceBlack,
+            topBar = {
+                TopAppBar(
+                    title = { Text("Knowledge Feed", color = Color.White) },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = SpaceSurface)
+                )
+            }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(SpaceBlack)
+            ) {
             // Radial Glow Effect
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .size(450.dp, 300.dp)
+                    .width(glowWidth)
+                    .height(if (isCompact) 220.dp else 300.dp)
                     .background(
                         brush = Brush.radialGradient(
                             colors = listOf(
@@ -56,13 +61,13 @@ fun FeedScreen() {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(if (isCompact) 12.dp else 16.dp),
                     colors = CardDefaults.cardColors(containerColor = SpaceSurface),
                     border = BorderStroke(1.dp, PurpleAccent.copy(alpha = 0.1f)),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(24.dp),
+                        modifier = Modifier.padding(if (isCompact) 16.dp else 24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
@@ -86,6 +91,7 @@ fun FeedScreen() {
                         )
                     }
                 }
+            }
             }
         }
     }

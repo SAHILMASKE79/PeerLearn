@@ -27,10 +27,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -38,7 +40,9 @@ import androidx.navigation.NavController
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.sahil.peerlearn.ui.theme.*
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PeerProfileScreen(
     peerUid: String,
@@ -54,6 +58,11 @@ fun PeerProfileScreen(
     val connectionDetails by viewModel.connectionDetails.collectAsState()
     val context = LocalContext.current
     val currentUid = Firebase.auth.currentUser?.uid ?: ""
+    
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    var showDisconnectSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
 
     LaunchedEffect(peerUid) {
         viewModel.fetchPeerProfile(peerUid)
@@ -63,19 +72,56 @@ fun PeerProfileScreen(
     val currentUserName = Firebase.auth.currentUser?.displayName ?: "Peer"
     val isLoaded = peerProfile != null
 
-    Scaffold(
-        containerColor = SpaceBlack
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+    if (showDisconnectSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showDisconnectSheet = false },
+            sheetState = sheetState,
+            containerColor = Color(0xFF1A1535),
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
         ) {
+            DisconnectSheetContent(
+                peerName = peerProfile?.name ?: "Peer",
+                onCancel = {
+                    scope.launch {
+                        sheetState.hide()
+                    }.invokeOnCompletion {
+                        showDisconnectSheet = false
+                    }
+                },
+                onConfirm = {
+                    viewModel.disconnectPeer(currentUid, peerUid) {
+                        scope.launch {
+                            sheetState.hide()
+                            snackbarHostState.showSnackbar("Disconnected. Chat history is safe.")
+                        }.invokeOnCompletion {
+                            showDisconnectSheet = false
+                        }
+                    }
+                }
+            )
+        }
+    }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val isCompact = maxWidth < 360.dp
+        val horizontalPadding = if (isCompact) 16.dp else 20.dp
+        val glowWidth = maxWidth * 1.15f
+
+        Scaffold(
+            containerColor = SpaceBlack,
+            snackbarHost = { SnackbarHost(snackbarHostState) }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
             // Radial Glow Effect
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .size(450.dp, 300.dp)
+                    .width(glowWidth)
+                    .height(if (isCompact) 220.dp else 300.dp)
                     .background(
                         Brush.radialGradient(
                             colors = listOf(PurpleGlow.copy(alpha = 0.35f), Color.Transparent)
@@ -93,6 +139,7 @@ fun PeerProfileScreen(
                         peer = peer,
                         connectionDetails = connectionDetails,
                         currentUid = currentUid,
+                        isCompact = isCompact,
                         onBackClick = { navController.popBackStack() },
                         onConnectClick = {
                             viewModel.sendConnectionRequest(currentUid, currentUserName, peerUid)
@@ -105,6 +152,9 @@ fun PeerProfileScreen(
                         },
                         onDeclineClick = {
                             viewModel.declineConnection(currentUid, peerUid)
+                        },
+                        onDisconnectClick = {
+                            showDisconnectSheet = true
                         }
                     )
                 }
@@ -113,7 +163,7 @@ fun PeerProfileScreen(
 
                 Column(
                     modifier = Modifier
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = horizontalPadding),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     // Skills Card
@@ -212,20 +262,24 @@ fun PeerProfileScreen(
                     Spacer(Modifier.height(40.dp))
                 }
             }
+            }
         }
     }
 }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun PeerProfileHeader(
     peer: UserProfile,
     connectionDetails: ConnectionDetails,
     currentUid: String,
+    isCompact: Boolean,
     onBackClick: () -> Unit,
     onConnectClick: () -> Unit,
     onMessageClick: () -> Unit,
     onAcceptClick: () -> Unit,
-    onDeclineClick: () -> Unit
+    onDeclineClick: () -> Unit,
+    onDisconnectClick: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "avatar_pulse")
     val avatarScale by infiniteTransition.animateFloat(
@@ -276,14 +330,14 @@ fun PeerProfileHeader(
                 .padding(
                     top = WindowInsets.statusBars
                         .asPaddingValues()
-                        .calculateTopPadding() + 40.dp
+                        .calculateTopPadding() + if (isCompact) 28.dp else 40.dp
                 ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Avatar circle
             Box(
                 modifier = Modifier
-                    .size(90.dp)
+                    .size(if (isCompact) 78.dp else 90.dp)
                     .scale(avatarScale)
                     .border(2.dp, PurpleAccent.copy(alpha = 0.5f), CircleShape)
                     .padding(4.dp)
@@ -294,7 +348,7 @@ fun PeerProfileHeader(
                 Text(
                     text = peer.name.firstOrNull()?.uppercase() ?: "?",
                     color = Color.White,
-                    fontSize = 36.sp,
+                    fontSize = if (isCompact) 30.sp else 36.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -305,8 +359,10 @@ fun PeerProfileHeader(
             Text(
                 text = peer.name,
                 color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = if (isCompact) 20.sp else 24.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
 
             // College • Year
@@ -323,7 +379,7 @@ fun PeerProfileHeader(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 40.dp)
+                    .padding(horizontal = if (isCompact) 20.dp else 40.dp)
             ) {
                 StatItem("Know", peer.teachSkills.size)
                 StatItem("Learn", peer.learnSkills.size)
@@ -333,56 +389,69 @@ fun PeerProfileHeader(
             Spacer(Modifier.height(24.dp))
 
             // Connection button
-            val interactionSource = remember { MutableInteractionSource() }
-            val isPressed by interactionSource.collectIsPressedAsState()
-            val buttonScale by animateFloatAsState(
-                targetValue = if (isPressed) 0.95f else 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                ),
-                label = "button_press"
-            )
-
-            when (connectionDetails.status) {
-                ConnectionStatus.NOT_CONNECTED -> {
-                    Button(
-                        onClick = onConnectClick,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PurpleAccent,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier
-                            .padding(horizontal = 32.dp)
-                            .fillMaxWidth()
-                    ) {
-                        Text(
-                            "Connect 🤝",
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                ConnectionStatus.PENDING -> {
-                    if (connectionDetails.requestedBy == currentUid) {
-                        OutlinedButton(
-                            onClick = {},
-                            enabled = false,
-                            border = BorderStroke(
-                                1.dp,
-                                PurpleAccent.copy(alpha = 0.5f)
+            AnimatedContent(
+                targetState = connectionDetails.status,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+                },
+                label = "button_transition"
+            ) { status ->
+                when (status) {
+                    ConnectionStatus.NOT_CONNECTED, ConnectionStatus.DISCONNECTED -> {
+                        Button(
+                            onClick = onConnectClick,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.Transparent,
+                                contentColor = PurpleAccent
                             ),
+                            shape = CircleShape,
+                            border = BorderStroke(1.dp, PurpleAccent),
                             modifier = Modifier
                                 .padding(horizontal = 32.dp)
                                 .fillMaxWidth()
                         ) {
-                            Text(
-                                "Request Sent ⏳",
-                                color = Color.White.copy(alpha = 0.7f)
-                            )
+                            Text("Connect 🤝", fontWeight = FontWeight.Bold)
                         }
-                    } else {
+                    }
+
+                    ConnectionStatus.PENDING -> {
+                        if (connectionDetails.requestedBy == currentUid) {
+                            OutlinedButton(
+                                onClick = {},
+                                enabled = false,
+                                border = BorderStroke(1.dp, PurpleAccent.copy(alpha = 0.5f)),
+                                modifier = Modifier
+                                    .padding(horizontal = 32.dp)
+                                    .fillMaxWidth()
+                            ) {
+                                Text("Request Sent ⏳", color = Color.White.copy(alpha = 0.7f))
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .padding(horizontal = 32.dp)
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = onAcceptClick,
+                                    colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Accept", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                OutlinedButton(
+                                    onClick = onDeclineClick,
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Decline", color = Color.White)
+                                }
+                            }
+                        }
+                    }
+
+                    ConnectionStatus.CONNECTED -> {
                         Row(
                             modifier = Modifier
                                 .padding(horizontal = 32.dp)
@@ -390,69 +459,119 @@ fun PeerProfileHeader(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
-                                onClick = onAcceptClick,
+                                onClick = onDisconnectClick,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = PurpleAccent
+                                    containerColor = Color.Transparent,
+                                    contentColor = Color(0xFF4CAF50)
                                 ),
+                                shape = CircleShape,
+                                border = BorderStroke(1.dp, Color(0xFF4CAF50)),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text(
-                                    "Accept",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Text("Connected ✓", fontWeight = FontWeight.Bold)
                             }
-                            OutlinedButton(
-                                onClick = onDeclineClick,
-                                border = BorderStroke(
-                                    1.dp, Color.White.copy(alpha = 0.3f)
-                                ),
+                            Button(
+                                onClick = onMessageClick,
+                                colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent),
+                                shape = CircleShape,
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text(
-                                    "Decline",
-                                    color = Color.White
-                                )
+                                Text("Message 💬", color = Color.White)
                             }
-                        }
-                    }
-                }
-
-                ConnectionStatus.CONNECTED -> {
-                    Row(
-                        modifier = Modifier
-                            .padding(horizontal = 32.dp)
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {},
-                            border = BorderStroke(
-                                1.dp, Color(0xFF4CAF50)
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                "Connected ✓",
-                                color = Color(0xFF4CAF50)
-                            )
-                        }
-                        Button(
-                            onClick = onMessageClick,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PurpleAccent
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                "Message 💬",
-                                color = Color.White
-                            )
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun DisconnectSheetContent(
+    peerName: String,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .background(Color(0xFFE53935).copy(alpha = 0.1f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Rounded.PersonRemove,
+                contentDescription = null,
+                tint = Color(0xFFE53935),
+                modifier = Modifier.size(32.dp)
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        Text(
+            "Disconnect from $peerName?",
+            color = Color.White,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            "Aap $peerName se disconnect ho jaoge.",
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        Surface(
+            color = Color(0xFF4CAF50).copy(alpha = 0.1f),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.2f))
+        ) {
+            Text(
+                "Chat history safe rahega ✓",
+                color = Color(0xFF4CAF50),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+
+        Spacer(Modifier.height(32.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+            ) {
+                Text("Cancel", color = Color.White)
+            }
+
+            Button(
+                onClick = onConfirm,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
+            ) {
+                Text("Haan, Disconnect Karo", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+        
+        Spacer(Modifier.height(16.dp))
     }
 }
 
@@ -541,7 +660,7 @@ fun SkillSection(title: String, skills: List<String>, chipColor: Color) {
 }
 
 @Composable
-fun IconInfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, text: String) {
+fun IconInfoRow(icon: ImageVector, label: String, text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
@@ -562,7 +681,7 @@ fun IconInfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: St
 
 @Composable
 fun SocialRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     label: String,
     link: String,
     context: android.content.Context

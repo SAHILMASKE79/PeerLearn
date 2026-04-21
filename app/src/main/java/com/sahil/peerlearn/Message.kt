@@ -7,10 +7,12 @@ data class Message(
     val chatId: String = "",
     val senderId: String = "",
     val receiverId: String = "",
-    val message: String = "",
+    val text: String = "",
+    val type: String = "text",
+    val imageUrl: String = "",
+    val codeSnippet: String = "",
+    val codeLanguage: String = "kotlin",
     val timestamp: Timestamp = Timestamp.now(),
-    val type: String = "text", // "text" or "code"
-    val language: String = "", // for "code" type
     val isRead: Boolean = false,
     val replyToId: String = "",
     val replyToText: String = "",

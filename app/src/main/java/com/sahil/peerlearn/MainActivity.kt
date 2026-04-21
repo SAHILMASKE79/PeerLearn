@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
@@ -37,8 +36,10 @@ import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.onesignal.OneSignal
 import com.onesignal.debug.LogLevel
+import com.google.firebase.messaging.FirebaseMessaging
 import com.sahil.peerlearn.ui.theme.PeerlearnTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -52,137 +53,218 @@ class MainActivity : ComponentActivity() {
             window.isNavigationBarContrastEnforced = false
         }
 
-        // POST_NOTIFICATIONS permission for Android 13+
-        if (Build.VERSION.SDK_INT >= 33) {
+        // Request POST_NOTIFICATIONS permission for Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissions(
                 arrayOf(Manifest.permission.POST_NOTIFICATIONS),
                 1001
             )
         }
 
-        // OneSignal Initialization
-        OneSignal.Debug.logLevel = LogLevel.VERBOSE
-        OneSignal.initWithContext(this, "74ed12e3-94a3-48bc-b54e-41651cc735cc")
-
-        // Notification permission maango
-        lifecycleScope.launch {
-            OneSignal.Notifications.requestPermission(true)
-        }
-
-        // User login hone ke baad
-        // OneSignal ID save karo
+        // Fetch FCM token and save to Firestore after login
         FirebaseAuth.getInstance().addAuthStateListener { auth ->
-            val uid = auth.currentUser?.uid ?: return@addAuthStateListener
-
-            // OneSignal me uid set karo
-            OneSignal.login(uid)
-
-            // 3 second baad ID save karo
-            lifecycleScope.launch {
-                delay(3000)
-                val osId = OneSignal.User.pushSubscription.id ?: return@launch
-
-                FirebaseFirestore.getInstance()
-                    .collection("users")
-                    .document(uid)
-                    .update("oneSignalId", osId)
-                    .addOnSuccessListener {
-                        Log.d("OneSignal", "ID saved: $osId")
+            val uid = auth.currentUser?.uid
+            if (uid != null) {
+                FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        val token = task.result
+                        Log.d("FCM_TOKEN", "Token: $token")
+                        
+                        FirebaseFirestore.getInstance()
+                            .collection("users")
+                            .document(uid)
+                            .update("fcm_token", token)
+                            .addOnSuccessListener {
+                                Log.d("FCM", "Token updated successfully")
+                            }
+                            .addOnFailureListener { e ->
+                                // If document doesn't exist yet, it might fail; 
+                                // typically handled in profile setup, but logging for now
+                                Log.e("FCM", "Error updating token", e)
+                            }
                     }
+                }
+                
+                // OneSignal login (existing)
+                OneSignal.login(uid)
             }
         }
 
         setContent {
             PeerlearnTheme {
-                AppNavigation()
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    val navController = rememberNavController()
+                    val auth = Firebase.auth
+                    val context = LocalContext.current
+                    val authManager = remember { AuthManager(context) }
+                    val scope = rememberCoroutineScope()
+
+                    // Handle notification navigation
+                    LaunchedEffect(intent) {
+                        val navigateTo = intent.getStringExtra("navigate_to")
+                        if (navigateTo == "notifications") {
+                            navController.navigate("notifications")
+                        }
+                    }
+
+                    NavHost(navController = navController, startDestination = "splash") {
+                        composable("splash") {
+                            SplashScreen(navController = navController)
+                        }
+                        composable("login") {
+                            LoginScreen(
+                                authManager = authManager,
+                                onLoginSuccess = {
+                                    navController.navigate("main") {
+                                        popUpTo("login") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+                        composable("skill_setup") {
+                            val user = auth.currentUser
+                            if (user != null) {
+                                SkillSetupScreen(
+                                    user = user,
+                                    authManager = authManager,
+                                    onComplete = {
+                                        navController.navigate("main") {
+                                            popUpTo("skill_setup") { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        composable("main") {
+                            AppNavigation(navController)
+                        }
+                        composable("email_verification") {
+                            val user = auth.currentUser
+                            if (user != null) {
+                                EmailVerificationScreen(
+                                    user = user,
+                                    onResendEmail = {
+                                        scope.launch { authManager.resendVerificationEmail() }
+                                    },
+                                    onRefresh = {
+                                        if (user.isEmailVerified) {
+                                            navController.navigate("main") {
+                                                popUpTo("email_verification") { inclusive = true }
+                                            }
+                                        }
+                                    },
+                                    onLogout = {
+                                        scope.launch {
+                                            authManager.signOut()
+                                            navController.navigate("login") {
+                                                popUpTo("email_verification") { inclusive = true }
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        composable("profile_setup") {
+                            ProfileSetupScreen(
+                                authManager = authManager,
+                                onProfileComplete = {
+                                    navController.navigate("main") {
+                                        popUpTo("profile_setup") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(navController: NavController) {
     val context = LocalContext.current
     val auth = Firebase.auth
     val authManager = remember { AuthManager(context) }
+    val userRepository = remember { UserRepository() }
     val scope = rememberCoroutineScope()
     
     var firebaseUser by remember { mutableStateOf(auth.currentUser) }
-    var isCheckingProfile by remember { mutableStateOf(true) }
+    var isCheckingStatus by remember { mutableStateOf(true) }
     var isProfileComplete by remember { mutableStateOf(false) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
 
     DisposableEffect(Unit) {
         val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener {
             firebaseUser = it.currentUser
+            if (it.currentUser == null) {
+                navController.navigate("login") {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
         }
         auth.addAuthStateListener(listener)
         onDispose { auth.removeAuthStateListener(listener) }
     }
 
     LaunchedEffect(firebaseUser, refreshTrigger) {
-        isCheckingProfile = true
+        isCheckingStatus = true
         val user = firebaseUser
         if (user != null) {
             try {
                 user.reload().await()
-            } catch (e: Exception) { }
-            
-            if (!user.isEmailVerified) {
-                isProfileComplete = false 
-            } else {
-                val userRepository = UserRepository()
-                isProfileComplete = userRepository.isProfileComplete(user.uid)
+                val profile = userRepository.getUserProfile(user.uid).firstOrNull()
+                isProfileComplete = profile?.teachSkills?.isNotEmpty() == true && profile.learnSkills.isNotEmpty()
+            } catch (e: Exception) {
+                Log.e("AppNavigation", "Status check failed", e)
             }
-        } else {
-            isProfileComplete = false
         }
-        isCheckingProfile = false
+        isCheckingStatus = false
     }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        if (isCheckingProfile) {
+        if (isCheckingStatus) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(color = com.sahil.peerlearn.ui.theme.PurpleAccent)
             }
         } else {
             val user = firebaseUser
-            when {
-                user == null -> {
-                    LoginScreen(
-                        authManager = authManager,
-                        onLoginSuccess = { }
-                    )
-                }
-                !user.isEmailVerified -> {
-                    EmailVerificationScreen(
-                        user = user,
-                        onResendEmail = {
-                            scope.launch {
-                                authManager.resendVerificationEmail()
+            if (user != null) {
+                when {
+                    !user.isEmailVerified -> {
+                        EmailVerificationScreen(
+                            user = user,
+                            onResendEmail = {
+                                scope.launch { authManager.resendVerificationEmail() }
+                            },
+                            onRefresh = {
+                                refreshTrigger++
+                            },
+                            onLogout = {
+                                scope.launch {
+                                    authManager.signOut()
+                                }
                             }
-                        },
-                        onRefresh = { refreshTrigger++ },
-                        onLogout = {
-                            scope.launch {
-                                authManager.signOut()
+                        )
+                    }
+                    !isProfileComplete -> {
+                        SkillSetupScreen(
+                            user = user,
+                            authManager = authManager,
+                            onComplete = {
+                                refreshTrigger++
                             }
-                        }
-                    )
-                }
-                !isProfileComplete -> {
-                    ProfileSetupScreen(
-                        authManager = authManager,
-                        onProfileComplete = { 
-                            refreshTrigger++
-                        }
-                    )
-                }
-                else -> {
-                    MainAppContent(user = user, authManager = authManager)
+                        )
+                    }
+                    else -> {
+                        MainAppContent(user = user, authManager = authManager)
+                    }
                 }
             }
         }
@@ -230,7 +312,13 @@ fun MainAppContent(user: FirebaseUser, authManager: AuthManager) {
             }
             composable("notifications") {
                 NotificationScreen(
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    onNavigateToChat = { peerUid ->
+                        navController.navigate("chat/$peerUid") {
+                            // Clear notification screen from backstack if you want
+                            popUpTo("notifications") { inclusive = true }
+                        }
+                    }
                 )
             }
             composable("search") {

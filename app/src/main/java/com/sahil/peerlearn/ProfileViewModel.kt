@@ -1,5 +1,6 @@
 package com.sahil.peerlearn
 
+import com.google.firebase.auth.FirebaseAuth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +13,8 @@ class ProfileViewModel(
     private val userRepository: UserRepository = UserRepository()
 ) : ViewModel() {
 
+    constructor() : this(UserRepository())
+
     private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Idle)
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
@@ -21,15 +24,20 @@ class ProfileViewModel(
     val peersCount: Int = 0 // Hardcoded for now
 
     fun fetchProfile(uid: String?) {
-        if (uid == null) {
+        val resolvedUid = uid?.takeIf { it.isNotBlank() } ?: FirebaseAuth.getInstance().currentUser?.uid
+        if (resolvedUid.isNullOrBlank()) {
             _uiState.value = ProfileUiState.Error("User ID is null")
             return
         }
         viewModelScope.launch {
             _uiState.value = ProfileUiState.Loading
-            userRepository.getUserProfile(uid).collectLatest { profile ->
+            userRepository.getUserProfile(resolvedUid).collectLatest { profile ->
                 _userProfile.value = profile
-                _uiState.value = ProfileUiState.Idle
+                _uiState.value = if (profile == null) {
+                    ProfileUiState.Error("Profile not found")
+                } else {
+                    ProfileUiState.Idle
+                }
             }
         }
     }
@@ -61,6 +69,22 @@ class ProfileViewModel(
                 },
                 onFailure = { e ->
                     _uiState.value = ProfileUiState.Error(e.message ?: "Update failed. Try again.")
+                }
+            )
+        }
+    }
+
+    fun uploadProfileImage(uid: String, imageUri: android.net.Uri) {
+        viewModelScope.launch {
+            _uiState.value = ProfileUiState.Loading
+            val result = userRepository.uploadProfileImage(uid, imageUri)
+            result.fold(
+                onSuccess = {
+                    fetchProfile(uid)
+                    _uiState.value = ProfileUiState.Success("Image uploaded successfully")
+                },
+                onFailure = { e ->
+                    _uiState.value = ProfileUiState.Error(e.message ?: "Failed to upload image")
                 }
             )
         }

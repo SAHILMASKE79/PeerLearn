@@ -1,6 +1,8 @@
 package com.sahil.peerlearn
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -16,11 +18,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.google.firebase.auth.FirebaseAuth
 import com.sahil.peerlearn.ui.theme.*
 import kotlinx.coroutines.delay
@@ -73,28 +79,37 @@ fun EditProfileScreen(
     LaunchedEffect(uiState) {
         if (uiState is ProfileUiState.Success) {
             snackbarHostState.showSnackbar((uiState as ProfileUiState.Success).message)
-            delay(1000)
-            onBack()
+            if ((uiState as ProfileUiState.Success).message.contains("Profile updated")) {
+                delay(1000)
+                onBack()
+            }
         } else if (uiState is ProfileUiState.Error) {
             snackbarHostState.showSnackbar((uiState as ProfileUiState.Error).message)
         }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text("Edit Profile", color = Color.White, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SpaceBlack)
-            )
-        },
-        containerColor = SpaceBlack
-    ) { padding ->
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val isCompact = maxWidth < 360.dp
+        val horizontalPadding = if (isCompact) 16.dp else 24.dp
+        val glowWidth = maxWidth * 1.15f
+
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text("Edit Profile", color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = SpaceBlack)
+                )
+            },
+            containerColor = SpaceBlack
+        ) { padding ->
         if (!isDataLoaded) {
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),
@@ -108,7 +123,8 @@ fun EditProfileScreen(
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .size(450.dp, 300.dp)
+                        .width(glowWidth)
+                        .height(if (isCompact) 220.dp else 300.dp)
                         .background(
                             brush = Brush.radialGradient(
                                 colors = listOf(PurpleGlow.copy(alpha = 0.35f), Color.Transparent)
@@ -125,30 +141,48 @@ fun EditProfileScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 32.dp),
+                            .padding(vertical = if (isCompact) 24.dp else 32.dp),
                         contentAlignment = Alignment.Center
                     ) {
+                        val launcher = rememberLauncherForActivityResult(
+                            contract = ActivityResultContracts.GetContent()
+                        ) { uri ->
+                            uri?.let { viewModel.uploadProfileImage(currentUid, it) }
+                        }
+
                         Box(
-                            modifier = Modifier.clickable { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() },
+                            modifier = Modifier.clickable { launcher.launch("image/*") },
                             contentAlignment = Alignment.BottomEnd
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(100.dp)
+                                    .size(if (isCompact) 88.dp else 100.dp)
                                     .clip(CircleShape)
                                     .background(SpaceSurface)
                                     .border(2.dp, PurpleAccent, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = nameState.firstOrNull()?.toString()?.uppercase() ?: "?",
-                                    fontSize = 40.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = PurpleAccent
-                                )
+                                if (profile?.profileImageUrl.isNullOrEmpty()) {
+                                    Text(
+                                        text = nameState.firstOrNull()?.toString()?.uppercase() ?: "?",
+                                        fontSize = 40.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PurpleAccent
+                                    )
+                                } else {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(profile?.profileImageUrl)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = "Profile Image",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
                             }
                             Surface(
-                                modifier = Modifier.size(32.dp),
+                                modifier = Modifier.size(if (isCompact) 28.dp else 32.dp),
                                 shape = CircleShape,
                                 color = PurpleAccent,
                                 border = BorderStroke(2.dp, SpaceBlack)
@@ -164,7 +198,7 @@ fun EditProfileScreen(
                     }
 
                     Column(
-                        modifier = Modifier.padding(horizontal = 24.dp),
+                        modifier = Modifier.padding(horizontal = horizontalPadding),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         UnderlineField("Full Name", nameState, Icons.Rounded.Person) { nameState = it }
@@ -179,7 +213,7 @@ fun EditProfileScreen(
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f), thickness = 0.5.dp)
                     Spacer(Modifier.height(24.dp))
 
-                    Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = horizontalPadding)) {
                         SkillEditSection("Skills I Know", teachSkillsList, PurpleAccent, enabled = true)
                         Spacer(Modifier.height(32.dp))
                         SkillEditSection("Want to Learn", learnSkillsList, PurpleGlow, enabled = true)
@@ -187,7 +221,7 @@ fun EditProfileScreen(
 
                     Spacer(Modifier.height(48.dp))
 
-                    Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                    Box(modifier = Modifier.padding(horizontal = horizontalPadding)) {
                         Button(
                             onClick = {
                                 viewModel.updateProfile(
@@ -218,6 +252,7 @@ fun EditProfileScreen(
                     Spacer(modifier = Modifier.height(40.dp))
                 }
             }
+        }
         }
     }
 }

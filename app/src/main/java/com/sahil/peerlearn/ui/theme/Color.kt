@@ -2,26 +2,52 @@ package com.sahil.peerlearn.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+val AppBackground = Color(0xFF0D0D1A)
+val AppSurface = Color(0xFF1A1A2E)
+val AppPrimary = Color(0xFF7C4DFF)
+val AppPrimaryDark = Color(0xFF6B3FE7)
+val AppGreen = Color(0xFF1DB954)
+val AppTextPrimary = Color(0xFFFFFFFF)
+val AppTextSecondary = Color(0xFF8888AA)
+val AppNavBar = Color(0xFF12122A)
+val AppCard = Color(0xFF16162A)
+val AppChipGreen = Color(0xFF1A3A2A)
+val AppChipPurple = Color(0xFF2A1A3A)
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val Primary = AppPrimary
+val Secondary = AppGreen
 
-// Space Theme Colors
-val SpaceBlack = Color(0xFF0E0B1F)
-val SpaceSurface = Color(0xFF1A1535)
-val PurpleGlow = Color(0xFF7B3FE4)
-val PurpleAccent = Color(0xFF9B5CF6)
+val BackgroundLight = AppBackground
+val BackgroundDark = AppBackground
+val SurfaceLight = AppSurface
+val SurfaceDark = AppSurface
 
-// PeerLearn Custom Colors
-val BgDeep        = Color(0xFF0A0A0F)
-val BgCard        = Color(0xFF13131C)
-val GlassStroke   = Color(0xFF2A2A3D)
-val AccentBlue    = Color(0xFF4F8EF7)
-val AccentPurple  = Color(0xFF9B59FF)
-val AccentCyan    = Color(0xFF00D4FF)
-val TextPrimary   = Color(0xFFF0F0FF)
-val TextSecondary = Color(0xFF8888AA)
+val OnPrimary = AppTextPrimary
+val OnSecondary = AppTextPrimary
+val OnBackgroundLight = AppTextPrimary
+val OnBackgroundDark = AppTextPrimary
+val OnSurfaceLight = AppTextPrimary
+val OnSurfaceDark = AppTextPrimary
+
+// Legacy aliases used across existing screens.
+val Purple80 = Primary
+val PurpleGrey80 = Secondary
+val Pink80 = Secondary
+
+val Purple40 = Primary
+val PurpleGrey40 = Secondary
+val Pink40 = Secondary
+
+val SpaceBlack = AppBackground
+val SpaceSurface = AppSurface
+val PurpleGlow = AppPrimaryDark
+val PurpleAccent = AppPrimary
+
+val BgDeep = AppBackground
+val BgCard = AppCard
+val GlassStroke = AppNavBar
+val AccentBlue = AppPrimary
+val AccentPurple = AppPrimary
+val AccentCyan = AppGreen
+val TextPrimary = AppTextPrimary
+val TextSecondary = AppTextSecondary

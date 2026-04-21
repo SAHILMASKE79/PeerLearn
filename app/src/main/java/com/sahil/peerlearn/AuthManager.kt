@@ -1,10 +1,12 @@
 package com.sahil.peerlearn
 
+import android.app.Activity
 import android.content.Context
 import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.Firebase
@@ -24,8 +26,13 @@ class AuthManager(private val context: Context) {
     // ── Google Sign In (Credential Manager) ──
     suspend fun signInWithGoogle(): Result<FirebaseUser> {
         return try {
+            val activity = context as? Activity ?: return Result.failure(Exception("Activity context required"))
             val webClientId = context.getString(R.string.default_web_client_id)
             
+            if (webClientId.contains("xxxxxxxxxxxxxxxx")) {
+                return Result.failure(Exception("Please configure your real Web Client ID in strings.xml"))
+            }
+
             val googleIdOption = GetGoogleIdOption.Builder()
                 .setFilterByAuthorizedAccounts(false)
                 .setServerClientId(webClientId)
@@ -36,7 +43,7 @@ class AuthManager(private val context: Context) {
                 .addCredentialOption(googleIdOption)
                 .build()
 
-            val result = credentialManager.getCredential(context, request)
+            val result = credentialManager.getCredential(activity, request)
             val credential = result.credential
 
             if (credential is GoogleIdTokenCredential) {
