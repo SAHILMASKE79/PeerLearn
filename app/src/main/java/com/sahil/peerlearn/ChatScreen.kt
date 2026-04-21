@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -55,61 +56,41 @@ fun ChatScreen(
     navController: NavController,
     viewModel: ChatViewModel = viewModel()
 ) {
-    val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
-    val chatId = remember(currentUid, peerUid) {
-        listOf(currentUid, peerUid).sorted().joinToString("_")
-    }
+    val messages by viewModel.messages.collectAsState()
+    val peerProfile by viewModel.peerProfile.collectAsState()
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val currentUid = currentUser?.uid ?: ""
+    val chatId = remember(peerUid, currentUid) { listOf(currentUid, peerUid).sorted().joinToString("_") }
+    val listState = rememberLazyListState()
+    val context = LocalContext.current
 
     var messageText by remember { mutableStateOf("") }
+    var showImageSourceDialog by remember { mutableStateOf(false) }
+    var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
     var showCodeDialog by remember { mutableStateOf(false) }
-    var showAttachmentSheet by remember { mutableStateOf(false) }
-    var showSessionDialog by remember { mutableStateOf(false) }
-    var sessionTopic by remember { mutableStateOf("") }
-
-    val messages by viewModel.messages.collectAsState()
-    val isPeerTyping by viewModel.isPeerTyping.collectAsState()
-    val peerProfile by viewModel.peerProfile.collectAsState()
-    val activeSession by viewModel.activeSession.collectAsState()
-    val timerSeconds by viewModel.timerSeconds.collectAsState()
-    val uploadProgress by viewModel.uploadProgress.collectAsState()
-
-    val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
-    val listState = rememberLazyListState()
-
-    var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
-
-    val galleryLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.uploadImage(chatId, currentUid, peerUid, it) }
-    }
-
-    val cameraLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture()
-    ) { success ->
-        if (success) {
-            cameraImageUri?.let { viewModel.uploadImage(chatId, currentUid, peerUid, it) }
-        }
-    }
+    
+    val activeSession by viewModel.activeStudySession.collectAsState()
+    val timerSeconds by viewModel.sessionTimeLeft.collectAsState()
 
     fun createImageUri(): Uri {
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val storageDir = context.cacheDir
+        val storageDir = context.getExternalFilesDir(null)
         val file = File.createTempFile("JPEG_${timeStamp}_", ".jpg", storageDir)
-        return FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
+        return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
 
-    LaunchedEffect(chatId) {
-        viewModel.loadMessages(chatId)
-        viewModel.observeTyping(chatId, peerUid)
-        viewModel.markMessagesAsRead(chatId, currentUid)
-        viewModel.loadPeerProfile(peerUid)
-        viewModel.observeSession(chatId)
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success) {
+            capturedImageUri?.let { viewModel.sendImageMessage(it) }
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { viewModel.sendImageMessage(it) }
+    }
+
+    LaunchedEffect(peerUid) {
+        viewModel.setPeerUid(peerUid)
     }
 
     LaunchedEffect(messages.size) {
@@ -126,7 +107,10 @@ fun ChatScreen(
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.clickable {
+                            navController.navigate("peer_profile/$peerUid")
+                        }
                     ) {
                         Box(
                             modifier = Modifier
@@ -155,171 +139,161 @@ fun ChatScreen(
                         }
                         Column {
                             Text(
-                                text = peerProfile?.name ?: "Chat",
+                                text = peerProfile?.name ?: "Loading...",
                                 color = Color.White,
                                 fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.Bold
                             )
-                            if (isPeerTyping) {
-                                Text(
-                                    "typing...",
-                                    color = Color(0xFF4ade80),
-                                    fontSize = 11.sp
-                                )
-                            }
+                            Text(
+                                text = "Active now",
+                                color = Color(0xFF10b981),
+                                fontSize = 11.sp
+                            )
                         }
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            "Back",
-                            tint = Color.White
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showSessionDialog = true }) {
-                        Icon(
-                            Icons.Default.Timer,
-                            "Study Session",
-                            tint = Color(0xFF7C4DFF)
-                        )
+                    IconButton(onClick = { /* More options */ }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF1A1A2E)
+                    containerColor = Color(0xFF1A1535),
+                    titleContentColor = Color.White
                 )
             )
 
-            activeSession?.let { session ->
-                StudySessionBanner(
-                    session = session,
-                    timerSeconds = timerSeconds,
-                    onEnd = { viewModel.endSession(session.sessionId) },
-                    onTopicChange = { viewModel.updateSessionTopic(session.sessionId, it) },
-                    onTogglePause = { viewModel.toggleSessionStatus(session.sessionId) }
-                )
-            }
-
-            Box(modifier = Modifier.weight(1f)) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(messages) { msg ->
-                        MessageBubble(
-                            message = msg,
-                            isMe = msg.senderId == currentUid,
-                            onCopyCode = {
-                                clipboardManager.setText(AnnotatedString(msg.codeSnippet))
-                                Toast.makeText(context, "Code copied!", Toast.LENGTH_SHORT).show()
-                            },
-                            onImageClick = {
-                                selectedImageUrl = it
+            // Chat Messages
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                state = listState,
+                contentPadding = PaddingValues(vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF2d1f5e)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (peerProfile?.profileImageUrl?.isNotEmpty() == true) {
+                                AsyncImage(
+                                    model = peerProfile?.profileImageUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Text(
+                                    text = peerProfile?.name?.take(2)?.uppercase() ?: "??",
+                                    color = Color(0xFFa78bfa),
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            peerProfile?.name ?: "Loading...",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "You are connected on PeerLearn",
+                            color = Color.Gray,
+                            fontSize = 12.sp
                         )
                     }
                 }
-                
-                if (uploadProgress != null) {
-                    LinearProgressIndicator(
-                        progress = { uploadProgress!! },
-                        modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter),
-                        color = PurpleAccent,
-                        trackColor = Color.White.copy(0.1f)
+
+                items(messages) { message ->
+                    val isMe = message.senderId == currentUid
+                    MessageBubble(
+                        message = message,
+                        isMe = isMe,
+                        onImageClick = { selectedImageUrl = message.imageUrl },
+                        onCodeClick = { /* Handle code */ }
                     )
                 }
+            }
+            
+            activeSession?.let { session ->
+                StudySessionBanner(
+                    session = session,
+                    timeLeft = timerSeconds * 1000,
+                    onEnd = { viewModel.endStudySession() },
+                    onExtend = { viewModel.extendStudySession() },
+                    onComplete = { viewModel.completeStudySession() }
+                )
             }
 
             ChatInputBar(
                 messageText = messageText,
-                onValueChange = { 
+                onMessageChange = { 
                     messageText = it
                     viewModel.onTextChanged(it, chatId, currentUid)
                 },
                 onSend = {
                     if (messageText.isNotBlank()) {
-                        viewModel.sendTextMessage(currentUid, peerUid, messageText)
+                        viewModel.sendMessage(messageText)
                         messageText = ""
                     }
                 },
-                onAttachClick = { showAttachmentSheet = true },
+                onImageClick = { showImageSourceDialog = true },
                 onCodeClick = { showCodeDialog = true }
             )
         }
-    }
 
-    if (showAttachmentSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showAttachmentSheet = false },
-            containerColor = SpaceSurface
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                ListItem(
-                    headlineContent = { Text("Camera", color = Color.White) },
-                    leadingContent = { Icon(Icons.Default.CameraAlt, null, tint = PurpleAccent) },
-                    modifier = Modifier.clickable {
-                        showAttachmentSheet = false
+        if (showImageSourceDialog) {
+            AlertDialog(
+                onDismissRequest = { showImageSourceDialog = false },
+                title = { Text("Send Image") },
+                text = { Text("Choose a source") },
+                confirmButton = {
+                    TextButton(onClick = {
                         val uri = createImageUri()
-                        cameraImageUri = uri
+                        capturedImageUri = uri
                         cameraLauncher.launch(uri)
-                    }
-                )
-                ListItem(
-                    headlineContent = { Text("Gallery", color = Color.White) },
-                    leadingContent = { Icon(Icons.Default.PhotoLibrary, null, tint = PurpleAccent) },
-                    modifier = Modifier.clickable {
-                        showAttachmentSheet = false
+                        showImageSourceDialog = false
+                    }) { Text("Camera") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
                         galleryLauncher.launch("image/*")
-                    }
-                )
-            }
-        }
-    }
-
-    if (showSessionDialog) {
-        AlertDialog(
-            onDismissRequest = { showSessionDialog = false },
-            containerColor = SpaceSurface,
-            title = { Text("Start Study Session", color = Color.White) },
-            text = {
-                OutlinedTextField(
-                    value = sessionTopic,
-                    onValueChange = { sessionTopic = it },
-                    label = { Text("Topic", color = Color.Gray) },
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    viewModel.startSession(chatId, sessionTopic)
-                    showSessionDialog = false
-                }, colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent)) {
-                    Text("Start")
+                        showImageSourceDialog = false
+                    }) { Text("Gallery") }
                 }
-            }
-        )
-    }
+            )
+        }
 
-    if (showCodeDialog) {
-        CodeSnippetDialog(
-            onDismiss = { showCodeDialog = false },
-            onSend = { code, lang ->
-                viewModel.sendCodeSnippet(currentUid, peerUid, code, lang)
-                showCodeDialog = false
-            }
-        )
-    }
+        if (showCodeDialog) {
+            CodeSnippetDialog(
+                onDismiss = { showCodeDialog = false },
+                onSend = { code, lang ->
+                    viewModel.sendCodeMessage(code, lang)
+                    showCodeDialog = false
+                }
+            )
+        }
 
-    if (selectedImageUrl != null) {
-        FullScreenImageViewer(
-            imageUrl = selectedImageUrl!!,
-            onDismiss = { selectedImageUrl = null }
-        )
+        selectedImageUrl?.let { url ->
+            FullScreenImageViewer(imageUrl = url, onDismiss = { selectedImageUrl = null })
+        }
     }
 }
 
@@ -333,7 +307,8 @@ fun FullScreenImageViewer(imageUrl: String, onDismiss: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                .clickable { onDismiss() }
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
         ) {
             AsyncImage(
                 model = imageUrl,
@@ -343,11 +318,9 @@ fun FullScreenImageViewer(imageUrl: String, onDismiss: () -> Unit) {
             )
             IconButton(
                 onClick = onDismiss,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
+                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
             ) {
-                Icon(Icons.Default.Close, "Close", tint = Color.White)
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
             }
         }
     }
@@ -356,68 +329,34 @@ fun FullScreenImageViewer(imageUrl: String, onDismiss: () -> Unit) {
 @Composable
 fun StudySessionBanner(
     session: StudySession,
-    timerSeconds: Long,
+    timeLeft: Long,
     onEnd: () -> Unit,
-    onTopicChange: (String) -> Unit,
-    onTogglePause: () -> Unit
+    onExtend: () -> Unit,
+    onComplete: () -> Unit
 ) {
-    var isEditingTopic by remember { mutableStateOf(false) }
-    var topicText by remember { mutableStateOf(session.topic) }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .background(Color(0xFF1A1A2E))
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFF2d1f5e),
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
     ) {
-        Icon(Icons.Default.Timer, null, tint = PurpleAccent, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(
-            formatTimer(timerSeconds),
-            color = if (session.status == "paused") Color.Gray else Color.White,
-            fontSize = 14.sp,
-            fontFamily = FontFamily.Monospace
-        )
-        
-        Spacer(Modifier.width(8.dp))
-        
-        IconButton(onClick = onTogglePause, modifier = Modifier.size(24.dp)) {
-            Icon(
-                imageVector = if (session.status == "active") Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (session.status == "active") "Pause" else "Resume",
-                tint = PurpleAccent,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-
-        Spacer(Modifier.width(8.dp))
-        
-        if (isEditingTopic) {
-            BasicTextField(
-                value = topicText,
-                onValueChange = { topicText = it },
-                textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = { 
-                onTopicChange(topicText)
-                isEditingTopic = false 
-            }) {
-                Icon(Icons.Default.Check, null, tint = PurpleAccent, modifier = Modifier.size(16.dp))
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text("Active Study Session", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Time Left: ${formatTimer(timeLeft)}", color = Color(0xFFa78bfa), fontSize = 12.sp)
             }
-        } else {
-            Text(
-                session.topic, 
-                color = Color.White, 
-                fontSize = 14.sp,
-                modifier = Modifier.weight(1f).clickable { isEditingTopic = true }
-            )
-        }
-
-        IconButton(onClick = onEnd) {
-            Icon(Icons.Default.Stop, null, tint = Color.Red, modifier = Modifier.size(20.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onEnd) { Text("End", color = Color.White) }
+                Button(
+                    onClick = onComplete,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFa78bfa))
+                ) {
+                    Text("Complete", color = Color.White)
+                }
+            }
         }
     }
 }
@@ -426,94 +365,106 @@ fun StudySessionBanner(
 fun MessageBubble(
     message: Message,
     isMe: Boolean,
-    onCopyCode: () -> Unit,
-    onImageClick: (String) -> Unit
+    onImageClick: () -> Unit,
+    onCodeClick: (String) -> Unit
 ) {
-    val bubbleColor = if (isMe) Color(0x337C4DFF) else Color(0xFF1A1A2E)
-    val borderColor = if (isMe) Color(0x597C4DFF) else Color(0x33FFFFFF)
+    val bubbleColor = if (isMe) Color(0xFF6d28d9) else Color(0xFF2d1f5e)
+    val alignment = if (isMe) Alignment.End else Alignment.Start
+    val bubbleShape = RoundedCornerShape(
+        topStart = 16.dp,
+        topEnd = 16.dp,
+        bottomStart = if (isMe) 16.dp else 4.dp,
+        bottomEnd = if (isMe) 4.dp else 16.dp
+    )
 
-    val bubbleShape = if (isMe) {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
-    } else {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.75f)
-                .wrapContentWidth(if (isMe) Alignment.End else Alignment.Start)
-                .clip(bubbleShape)
-                .background(bubbleColor)
-                .border(1.dp, borderColor, bubbleShape)
-                .padding(horizontal = 10.dp, vertical = 8.dp)
-        ) {
-            when (message.type.lowercase()) {
-                "text" -> Text(
-                    text = message.text,
-                    color = if (isMe) Color(0xFFFFFFFF) else Color(0xFFE0E0E0),
-                    fontSize = 14.sp
-                )
-                "image" -> AsyncImage(
-                    model = message.imageUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 200.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { onImageClick(message.imageUrl) },
-                    contentScale = ContentScale.Crop
-                )
-                "code" -> CodeMessageBubble(message, onCopyCode)
-                else -> Text(
-                    text = message.text,
-                    color = if (isMe) Color(0xFFFFFFFF) else Color(0xFFE0E0E0),
-                    fontSize = 14.sp
-                )
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = alignment) {
+        when (message.type) {
+            "code" -> {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.85f)
+                            .clip(bubbleShape)
+                            .background(if (isMe) Color(0x337C4DFF) else Color(0xFF1A1A2E))
+                            .border(1.dp, if (isMe) Color(0x597C4DFF) else Color(0x33FFFFFF), bubbleShape)
+                    ) {
+                        CodeMessageBubble(message, onCodeClick = { onCodeClick(message.codeSnippet) })
+                    }
+                }
+            }
+            else -> {
+                Surface(
+                    color = bubbleColor,
+                    shape = bubbleShape,
+                    modifier = Modifier.widthIn(max = 280.dp)
+                ) {
+                    when (message.type) {
+                        "text" -> Text(
+                            text = message.text,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            color = Color.White
+                        )
+                        "image" -> AsyncImage(
+                            model = message.imageUrl,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clickable { onImageClick() },
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
             }
         }
         Text(
-            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(message.timestamp.toDate()),
-            color = Color.White.copy(alpha = 0.4f),
+            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(message.timestamp?.toDate() ?: Date()),
+            color = Color.Gray,
             fontSize = 10.sp,
-            modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp)
+            modifier = Modifier.padding(top = 4.dp)
         )
     }
 }
 
 @Composable
-fun CodeMessageBubble(message: Message, onCopy: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFF0D0D1A), RoundedCornerShape(8.dp))
+fun CodeMessageBubble(message: Message, onCodeClick: () -> Unit) {
+    val clipboardManager = LocalClipboardManager.current
+    
+    Box(modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 4.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF1e1e1e))
         ) {
-            Text(message.codeLanguage.uppercase(), color = PurpleAccent, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-            IconButton(onClick = onCopy, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.ContentCopy, null, tint = Color.White.copy(0.6f), modifier = Modifier.size(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(message.codeLanguage.uppercase(), color = Color(0xFFa78bfa), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                IconButton(onClick = { clipboardManager.setText(AnnotatedString(message.codeSnippet)) }, modifier = Modifier.size(20.dp)) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = Color.Gray, modifier = Modifier.size(14.dp))
+                }
             }
-        }
-        Box(modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 200.dp)
-            .padding(8.dp)
-            .verticalScroll(rememberScrollState())
-            .horizontalScroll(rememberScrollState())
-        ) {
-            Text(
-                message.codeSnippet,
-                color = Color(0xFFE0E0E0),
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace
-            )
+            Box(modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF000000).copy(alpha = 0.3f))
+                .padding(12.dp)
+                .horizontalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = message.codeSnippet,
+                    color = Color(0xFFd4d4d4),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp
+                )
+            }
         }
     }
 }
@@ -521,63 +472,89 @@ fun CodeMessageBubble(message: Message, onCopy: () -> Unit) {
 @Composable
 fun ChatInputBar(
     messageText: String,
-    onValueChange: (String) -> Unit,
+    onMessageChange: (String) -> Unit,
     onSend: () -> Unit,
-    onAttachClick: () -> Unit,
+    onImageClick: () -> Unit,
     onCodeClick: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(SpaceSurface)
-            .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFF1A1535),
+        tonalElevation = 4.dp
     ) {
-        IconButton(onClick = onAttachClick) { Icon(Icons.Default.AttachFile, null, tint = PurpleAccent) }
-        IconButton(onClick = onCodeClick) { Icon(Icons.Default.Code, null, tint = PurpleAccent) }
-        
-        TextField(
-            value = messageText,
-            onValueChange = onValueChange,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text("Message...", color = Color.Gray) },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = SpaceBlack,
-                unfocusedContainerColor = SpaceBlack,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
-            ),
-            shape = RoundedCornerShape(24.dp)
-        )
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+                .navigationBarsPadding(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onImageClick) {
+                Icon(Icons.Default.Add, contentDescription = "Attach", tint = Color(0xFFa78bfa))
+            }
+            IconButton(onClick = onCodeClick) {
+                Icon(Icons.Default.Code, contentDescription = "Code", tint = Color(0xFFa78bfa))
+            }
+            
+            Surface(
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                color = Color(0xFF2d1f5e),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                BasicTextField(
+                    value = messageText,
+                    onValueChange = onMessageChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFFa78bfa))
+                )
+            }
 
-        IconButton(onClick = onSend) {
-            Icon(Icons.AutoMirrored.Filled.Send, null, tint = PurpleAccent)
+            IconButton(
+                onClick = onSend,
+                enabled = messageText.isNotBlank()
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Send,
+                    contentDescription = "Send",
+                    tint = if (messageText.isNotBlank()) Color(0xFFa78bfa) else Color.Gray
+                )
+            }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CodeSnippetDialog(onDismiss: () -> Unit, onSend: (String, String) -> Unit) {
     var code by remember { mutableStateOf("") }
     var language by remember { mutableStateOf("kotlin") }
-    val languages = listOf("kotlin", "java", "python", "javascript", "sql", "other")
+    val languages = listOf("kotlin", "java", "python", "javascript", "cpp", "c")
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = SpaceSurface,
         title = { Text("Share Code", color = Color.White) },
         text = {
             Column {
                 Text("Language:", color = Color.Gray, fontSize = 12.sp)
-                LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.height(100.dp)) {
-                    items(languages) { lang ->
+                // CRASH FIX: Replaced FlowRow with scrollable Row to avoid library incompatibility (NoSuchMethodError)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    languages.forEach { lang ->
                         FilterChip(
                             selected = language == lang,
                             onClick = { language = lang },
                             label = { Text(lang) },
-                            modifier = Modifier.padding(2.dp)
+                            colors = FilterChipDefaults.filterChipColors(
+                                labelColor = Color.White.copy(alpha = 0.7f),
+                                selectedLabelColor = Color.White
+                            )
                         )
                     }
                 }
@@ -586,21 +563,24 @@ fun CodeSnippetDialog(onDismiss: () -> Unit, onSend: (String, String) -> Unit) {
                     value = code,
                     onValueChange = { code = it },
                     modifier = Modifier.fillMaxWidth().height(200.dp),
-                    textStyle = TextStyle(fontFamily = FontFamily.Monospace),
+                    placeholder = { Text("Paste your code here...") },
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
             }
         },
         confirmButton = {
-            Button(onClick = { onSend(code, language) }, colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent)) {
-                Text("Send Code")
-            }
-        }
+            Button(onClick = { onSend(code, language) }) { Text("Send") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        containerColor = Color(0xFF1A1535)
     )
 }
 
-fun formatTimer(seconds: Long): String {
-    val m = seconds / 60
-    val s = seconds % 60
-    return "%02d:%02d".format(m, s)
+fun formatTimer(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%02d:%02d".format(minutes, seconds)
 }

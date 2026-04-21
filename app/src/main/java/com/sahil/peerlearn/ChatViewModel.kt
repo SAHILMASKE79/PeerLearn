@@ -24,6 +24,9 @@ class ChatViewModel : ViewModel() {
     private val storage = Firebase.storage
     private val userRepository = UserRepository()
 
+    private var currentPeerUid: String? = null
+    private var currentChatId: String? = null
+
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
 
@@ -34,16 +37,74 @@ class ChatViewModel : ViewModel() {
     val peerProfile: StateFlow<UserProfile?> = _peerProfile
 
     private val _activeSession = MutableStateFlow<StudySession?>(null)
-    val activeSession: StateFlow<StudySession?> = _activeSession
+    val activeStudySession: StateFlow<StudySession?> = _activeSession
 
     private val _timerSeconds = MutableStateFlow(0L)
-    val timerSeconds: StateFlow<Long> = _timerSeconds
+    val sessionTimeLeft: StateFlow<Long> = _timerSeconds
 
     private val _uploadProgress = MutableStateFlow<Float?>(null)
     val uploadProgress: StateFlow<Float?> = _uploadProgress
 
     private var timerJob: Job? = null
     private var typingJob: Job? = null
+
+    // ── Public API for ChatScreen ──
+
+    fun setPeerUid(peerUid: String) {
+        currentPeerUid = peerUid
+        val currentUid = Firebase.auth.currentUser?.uid ?: return
+        val chatId = listOf(currentUid, peerUid).sorted().joinToString("_")
+        currentChatId = chatId
+
+        loadPeerProfile(peerUid)
+        loadMessages(chatId)
+        observeTyping(chatId, peerUid)
+        observeSession(chatId)
+        markMessagesAsRead(chatId, currentUid)
+    }
+
+    fun sendMessage(text: String) {
+        val senderId = Firebase.auth.currentUser?.uid ?: return
+        val receiverId = currentPeerUid ?: return
+        sendTextMessage(senderId, receiverId, text)
+    }
+
+    fun sendCodeMessage(code: String, language: String) {
+        val senderId = Firebase.auth.currentUser?.uid ?: return
+        val receiverId = currentPeerUid ?: return
+        sendCodeSnippet(senderId, receiverId, code, language)
+    }
+
+    fun sendImageMessage(uri: Uri) {
+        val chatId = currentChatId ?: return
+        val senderId = Firebase.auth.currentUser?.uid ?: return
+        val receiverId = currentPeerUid ?: return
+        uploadImage(chatId, senderId, receiverId, uri)
+    }
+
+    fun endStudySession() {
+        _activeSession.value?.sessionId?.let { endSession(it) }
+    }
+
+    fun extendStudySession() {
+        // Placeholder for extending session logic
+    }
+
+    fun completeStudySession() {
+        _activeSession.value?.sessionId?.let { sessionId ->
+            viewModelScope.launch {
+                try {
+                    db.collection("studySessions").document(sessionId)
+                        .update("status", "completed").await()
+                    _activeSession.value = null
+                    timerJob?.cancel()
+                    _timerSeconds.value = 0L
+                } catch (e: Exception) {
+                    Log.e("ChatVM", "completeStudySession failed: ${e.message}")
+                }
+            }
+        }
+    }
 
     // ── Messages ──
 

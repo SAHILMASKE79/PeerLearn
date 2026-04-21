@@ -59,10 +59,15 @@ class PeerProfileViewModel(
             try {
                 userRepository.sendConnectionRequest(currentUid, currentUserName, peerUid).fold(
                     onSuccess = {
-                        // Status will be updated via observer
+                        _uiState.value = PeerProfileUiState.Success("Request sent! 🤝")
                     },
                     onFailure = { e ->
-                        _uiState.value = PeerProfileUiState.Error(e.message ?: "Failed to send request")
+                        if (e.message?.contains("already exists") == true) {
+                            // Force refresh connection status
+                            checkConnectionStatus(currentUid, peerUid)
+                        } else {
+                            _uiState.value = PeerProfileUiState.Error(e.message ?: "Failed to send request")
+                        }
                     }
                 )
             } catch (e: Exception) {
@@ -70,6 +75,10 @@ class PeerProfileViewModel(
                 _uiState.value = PeerProfileUiState.Error(e.message ?: "An error occurred")
             }
         }
+    }
+
+    fun resetUiState() {
+        _uiState.value = PeerProfileUiState.Idle
     }
 
     fun acceptConnection(currentUid: String, currentUserName: String, fromUid: String) {
@@ -142,5 +151,6 @@ class PeerProfileViewModel(
 sealed class PeerProfileUiState {
     object Idle : PeerProfileUiState()
     object Loading : PeerProfileUiState()
+    data class Success(val message: String) : PeerProfileUiState()
     data class Error(val message: String) : PeerProfileUiState()
 }

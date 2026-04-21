@@ -61,8 +61,23 @@ fun PeerProfileScreen(
     
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val uiState by viewModel.uiState.collectAsState()
     var showDisconnectSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
+
+    LaunchedEffect(uiState) {
+        when (val state = uiState) {
+            is PeerProfileUiState.Success -> {
+                snackbarHostState.showSnackbar(state.message)
+                viewModel.resetUiState()
+            }
+            is PeerProfileUiState.Error -> {
+                snackbarHostState.showSnackbar(state.message)
+                viewModel.resetUiState()
+            }
+            else -> {}
+        }
+    }
 
     LaunchedEffect(peerUid) {
         viewModel.fetchPeerProfile(peerUid)
@@ -410,7 +425,7 @@ fun PeerProfileHeader(
                                 .padding(horizontal = 32.dp)
                                 .fillMaxWidth()
                         ) {
-                            Text("Connect 🤝", fontWeight = FontWeight.Bold)
+                            Text("Connect", fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -538,7 +553,7 @@ fun DisconnectSheetContent(
             border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.2f))
         ) {
             Text(
-                "Chat history safe rahega ✓",
+                "Chat history will be safe",
                 color = Color(0xFF4CAF50),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
@@ -567,7 +582,7 @@ fun DisconnectSheetContent(
                 shape = RoundedCornerShape(20.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
             ) {
-                Text("Haan, Disconnect Karo", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Disconnect", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
         

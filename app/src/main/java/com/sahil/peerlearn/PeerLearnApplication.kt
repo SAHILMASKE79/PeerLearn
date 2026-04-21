@@ -22,13 +22,16 @@ class PeerLearnApplication : Application() {
             DebugAppCheckProviderFactory.getInstance(),
         )
 
-        // Verbose logging helps debug OneSignal issues
-        OneSignal.Debug.logLevel = LogLevel.VERBOSE
+        // Reduce log level to avoid internal GMS/Awareness API noise
+        OneSignal.Debug.logLevel = LogLevel.WARN
 
         // OneSignal Initialization
         // TODO: Replace with your actual OneSignal App ID
         val oneSignalAppId = "74ed12e3-94a3-48bc-b54e-41651cc735cc"
         OneSignal.initWithContext(this, oneSignalAppId)
+
+        // Disable location sharing to avoid Awareness API errors if not used
+        OneSignal.Location.isShared = false
 
         createNotificationChannels()
     }

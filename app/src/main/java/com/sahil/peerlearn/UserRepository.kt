@@ -27,25 +27,6 @@ class UserRepository {
     private val storage = Firebase.storage
     private val usersCollection = db.collection("users")
 
-    suspend fun uploadProfileImage(uid: String, imageUri: Uri): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val storageRef = storage.reference.child("profile_images/$uid.jpg")
-            if (imageUri.scheme == "file") {
-                storageRef.putFile(imageUri).await()
-            } else {
-                val inputStream = storage.app.applicationContext.contentResolver.openInputStream(imageUri)
-                inputStream?.use { stream ->
-                    storageRef.putStream(stream).await()
-                } ?: throw Exception("Could not open image stream")
-            }
-            val downloadUrl = storageRef.downloadUrl.await().toString()
-            usersCollection.document(uid).update("profileImageUrl", downloadUrl).await()
-            Result.success(downloadUrl)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
     suspend fun createUserProfile(uid: String, email: String, name: String): Result<Unit> {
         return try {
             val userProfile = mutableMapOf(
@@ -184,17 +165,52 @@ class UserRepository {
         return try {
             val docId = getConnectionDocId(currentUid, peerUid)
 
-            // Check if connection already exists
-            val existing = db.collection("connections").document(docId).get().await()
-            if (existing.exists()) {
-                return Result.failure(Exception("Connection already exists"))
-            }
-
-            val sortedUids = listOf(currentUid, peerUid).sorted()
-
             val senderName = if (currentUserName == "Peer" || currentUserName.isEmpty()) {
                 usersCollection.document(currentUid).get().await().getString("name") ?: "A Peer"
             } else currentUserName
+
+            // Check if connection already exists
+            val existing = db.collection("connections").document(docId).get().await()
+            if (existing.exists()) {
+                val status = existing.getString("status") ?: ""
+
+                when (status) {
+                    "connected" -> return Result.failure(Exception("Connection already exists"))
+                    "pending" -> return Result.failure(Exception("Connection already exists"))
+                    "disconnected" -> {
+                        // Allow reconnect — update existing document
+                        db.collection("connections").document(docId).update(
+                            mapOf(
+                                "status" to "pending",
+                                "requestedBy" to currentUid,
+                                "createdAt" to FieldValue.serverTimestamp(),
+                                "connectedAt" to null
+                            )
+                        ).await()
+
+                        val notifData = mapOf(
+                            "toUid" to peerUid,
+                            "fromUid" to currentUid,
+                            "fromName" to senderName,
+                            "type" to "connection_request",
+                            "message" to "$senderName wants to connect with you! 🤝",
+                            "isRead" to false,
+                            "createdAt" to FieldValue.serverTimestamp()
+                        )
+                        db.collection("notifications").add(notifData).await()
+
+                        sendPushNotification(
+                            toUid = peerUid,
+                            title = "New Connection Request",
+                            body = "$senderName wants to connect with you! 🤝"
+                        )
+
+                        return Result.success(Unit)
+                    }
+                }
+            }
+
+            val sortedUids = listOf(currentUid, peerUid).sorted()
 
             val connectionData = mapOf(
                 "user1" to sortedUids[0],
@@ -468,50 +484,65 @@ class UserRepository {
     }
 
     // ✅ FIXED: Messages now stored in chats/{chatId}/messages subcollection
-    suspend fun sendMessage(
-        chatId: String,
-        senderId: String,
-        senderName: String,
-        receiverId: String,
-        messageText: String,
-        type: String = "text",
-        language: String? = null
-    ): Result<Unit> {
-        return try {
-            val messageData = mutableMapOf<String, Any>(
-                "senderId" to senderId,
-                "receiverId" to receiverId,
-                "text" to messageText,
-                "timestamp" to FieldValue.serverTimestamp(),
-                "type" to type,
-                "isRead" to false
-            )
-            language?.let { messageData["codeLanguage"] = it }
+    suspend fun uploadProfileImage(uid: String, imageUri: Uri): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val context = storage.app.applicationContext
+            val inputStream = context.contentResolver.openInputStream(imageUri)
+            val bytes = inputStream?.readBytes() ?: throw Exception("Could not read image bytes")
+            val base64Image = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+            
+            val timestamp = System.currentTimeMillis() / 1000
+            val cloudName = BuildConfig.CLOUDINARY_CLOUD_NAME
+            val apiKey = BuildConfig.CLOUDINARY_API_KEY
+            val apiSecret = BuildConfig.CLOUDINARY_API_SECRET
 
-            // ✅ Correct path: chats/{chatId}/messages subcollection
-            db.collection("chats").document(chatId)
-                .collection("messages").add(messageData).await()
+            android.util.Log.d("Cloudinary", "CloudName: $cloudName")
+            android.util.Log.d("Cloudinary", "ApiKey: $apiKey")
+            android.util.Log.d("Cloudinary", "Secret empty: ${apiSecret.isEmpty()}")
 
-            // ✅ Update last message in connections document
-            db.collection("connections").document(chatId).update(
-                mapOf(
-                    "lastMessage" to messageText,
-                    "lastMessageTimestamp" to FieldValue.serverTimestamp()
-                )
-            ).await()
+            val toSign = "public_id=profile_$uid&timestamp=$timestamp$apiSecret"
+            val signature = sha1(toSign)
 
-            // Push notification
-            sendPushNotification(
-                toUid = receiverId,
-                title = senderName,
-                body = messageText
-            )
+            val client = OkHttpClient()
+            val requestBody = okhttp3.MultipartBody.Builder()
+                .setType(okhttp3.MultipartBody.FORM)
+                .addFormDataPart("file", "data:image/jpeg;base64,$base64Image")
+                .addFormDataPart("api_key", apiKey)
+                .addFormDataPart("timestamp", timestamp.toString())
+                .addFormDataPart("public_id", "profile_$uid")
+                .addFormDataPart("signature", signature)
+                .build()
 
-            Result.success(Unit)
+            val request = Request.Builder()
+                .url("https://api.cloudinary.com/v1_1/$cloudName/image/upload")
+                .post(requestBody)
+                .build()
+
+            val response = client.newCall(request).execute()
+            val responseBody = response.body?.string() ?: throw Exception("Empty response from Cloudinary")
+            
+            if (!response.isSuccessful) {
+                throw Exception("Cloudinary upload failed: $responseBody")
+            }
+
+            val jsonResponse = JSONObject(responseBody)
+            val imageUrl = jsonResponse.getString("secure_url")
+
+            // ✅ Save URL to Firestore using set with merge
+            usersCollection.document(uid)
+                .set(mapOf("profileImageUrl" to imageUrl), com.google.firebase.firestore.SetOptions.merge())
+                .await()
+
+            Result.success(imageUrl)
         } catch (e: Exception) {
-            android.util.Log.e("sendMessage", "Failed: ${e.message}")
+            android.util.Log.e("UserRepository", "Upload failed: ${e.message}")
             Result.failure(e)
         }
+    }
+
+    private fun sha1(input: String): String {
+        val md = java.security.MessageDigest.getInstance("SHA-1")
+        return md.digest(input.toByteArray()).joinToString("") { "%02x".format(it) }
     }
 
     // ✅ FIXED: getMessages bhi same subcollection se fetch karo
@@ -531,6 +562,46 @@ class UserRepository {
                 trySend(messages)
             }
         awaitClose { listener.remove() }
+    }
+
+    suspend fun sendMessage(
+        chatId: String,
+        senderId: String,
+        senderName: String,
+        receiverId: String,
+        messageText: String,
+        type: String = "text"
+    ): Result<Unit> {
+        return try {
+            val messageData = mapOf(
+                "senderId" to senderId,
+                "receiverId" to receiverId,
+                "text" to messageText,
+                "timestamp" to FieldValue.serverTimestamp(),
+                "type" to type,
+                "isRead" to false
+            )
+
+            db.collection("chats").document(chatId)
+                .collection("messages").add(messageData).await()
+
+            db.collection("connections").document(chatId).update(
+                mapOf(
+                    "lastMessage" to if (type == "text") messageText else "[$type]",
+                    "lastMessageTimestamp" to FieldValue.serverTimestamp()
+                )
+            ).await()
+
+            sendPushNotification(
+                toUid = receiverId,
+                title = "New message from $senderName",
+                body = if (type == "text") messageText else "Sent a $type"
+            )
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun sendPushNotification(

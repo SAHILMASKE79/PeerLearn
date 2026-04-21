@@ -21,7 +21,21 @@ class ProfileViewModel(
     private val _userProfile = MutableStateFlow<UserProfile?>(null)
     val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
 
-    val peersCount: Int = 0 // Hardcoded for now
+    private val _peersCount = MutableStateFlow(0)
+    val peersCount: StateFlow<Int> = _peersCount.asStateFlow()
+
+    fun fetchPeersCount(uid: String) {
+        viewModelScope.launch {
+            try {
+                val result = userRepository.getConnectedPeers(uid)
+                result.onSuccess { peers ->
+                    _peersCount.value = peers.size
+                }
+            } catch (e: Exception) {
+                _peersCount.value = 0
+            }
+        }
+    }
 
     fun fetchProfile(uid: String?) {
         val resolvedUid = uid?.takeIf { it.isNotBlank() } ?: FirebaseAuth.getInstance().currentUser?.uid
@@ -36,6 +50,7 @@ class ProfileViewModel(
                 _uiState.value = if (profile == null) {
                     ProfileUiState.Error("Profile not found")
                 } else {
+                    fetchPeersCount(resolvedUid)
                     ProfileUiState.Idle
                 }
             }

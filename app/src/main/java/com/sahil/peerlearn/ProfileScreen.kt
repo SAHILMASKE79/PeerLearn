@@ -94,6 +94,7 @@ fun ProfileScreen(
 ) {
     val profile by viewModel.userProfile.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val peersCount by viewModel.peersCount.collectAsState()
     val context = LocalContext.current
     val isLoading = uiState is ProfileUiState.Loading || (profile == null && uiState !is ProfileUiState.Error)
 
@@ -164,7 +165,7 @@ fun ProfileScreen(
                             item {
                                 ProfileHeader(
                                     user = user,
-                                    peersCount = viewModel.peersCount,
+                                    peersCount = peersCount,
                                     showBackArrow = showBackArrow,
                                     onBackClick = onBackClick,
                                     onImageSelected = { uid, uri -> viewModel.uploadProfileImage(uid, uri) },

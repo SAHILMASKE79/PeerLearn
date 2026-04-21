@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "1034404319201",
+    "firebase_url": "https://peerlearn-c860a-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "peerlearn-c860a",
+    "storage_bucket": "peerlearn-c860a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1034404319201:android:a35760b2f8476ac1c28ca0",
+        "android_client_info": {
+          "package_name": "com.sahil.peerlearn"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1034404319201-ig0bd8747b300cb3rga1lehkt9f6jeq8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5ZnMwLnLcSIrrq-3a599njB9qxdHXnb0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1034404319201-ig0bd8747b300cb3rga1lehkt9f6jeq8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
