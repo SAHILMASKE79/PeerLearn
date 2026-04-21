@@ -16,7 +16,7 @@
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=flat-square&logo=firebase&logoColor=black)
 ![Android](https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white)
-![Status](https://img.shields.io/badge/Status-Building_🔨-FF6B6B?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Active_Development_🔨-FF6B6B?style=flat-square)
 
 </div>
 
@@ -28,8 +28,8 @@ object PeerLearn {
     val platform   = "Android"
     val language   = "Kotlin"
     val ui         = "Jetpack Compose"
-    val backend    = "Firebase"
-    val status     = "Phase 1 — In Development 🔨"
+    val backend    = "Firebase + Cloudinary"
+    val status     = "Phase 1 Complete — Phase 2 In Progress 🚀"
 }
 ```
 
@@ -39,12 +39,13 @@ object PeerLearn {
 
 ```
 📦 PeerLearn
- ┣ 🔐 Auth          →  Email + Google Sign-in (Firebase)
- ┣ 👤 Profile       →  User setup & preferences
+ ┣ 🔐 Auth          →  Email Sign-in + Verification (Firebase)
+ ┣ 👤 Profile       →  Edit profile + Photo upload (Cloudinary)
  ┣ 🏠 Home Feed     →  Discover peers & topics
- ┣ 🤝 Peer Match    →  Smart student matching
- ┣ 💬 Chat          →  Real-time messaging
- ┗ 📖 Sessions      →  Book study sessions
+ ┣ 🤝 Peer Match    →  Smart skill-based peer matching
+ ┣ 🔔 Notifications →  Real-time connection requests
+ ┣ 💬 Chat          →  Real-time messaging + Code snippets + Images
+ ┗ 📖 Sessions      →  Study session timer
 ```
 
 ---
@@ -53,12 +54,13 @@ object PeerLearn {
 
 | Phase | What | Status |
 |-------|------|--------|
-| 01 | Auth + Login UI | 🔨 Building |
-| 02 | Profile + Home | ⏳ Next |
-| 03 | Peer Matching | 📋 Planned |
-| 04 | Real-time Chat | 📋 Planned |
-| 05 | Study Sessions | 📋 Planned |
-| 06 | Play Store 🚀 | 🎯 Goal |
+| 01 | Auth + Login UI | ✅ Done |
+| 02 | Profile + Photo Upload | ✅ Done |
+| 03 | Peer Matching + Connect | ✅ Done |
+| 04 | Real-time Chat + Code Share | ✅ Done |
+| 05 | Notifications | ✅ Done |
+| 06 | Study Sessions | 🔨 Building |
+| 07 | Play Store 🚀 | 🎯 Goal |
 
 ---
 
@@ -67,6 +69,7 @@ object PeerLearn {
 ```bash
 git clone https://github.com/SAHILMASKE79/PeerLearn.git
 # Add your google-services.json in /app
+# Add Cloudinary keys in local.properties
 # Open in Android Studio → Run
 ```
 
@@ -79,7 +82,8 @@ UI          →   Jetpack Compose + Material 3
 Language    →   Kotlin (100%)
 Auth        →   Firebase Authentication
 Database    →   Cloud Firestore
-Storage     →   Firebase Storage
+Storage     →   Cloudinary (profile & chat images)
+Messaging   →   OneSignal Push Notifications
 Pattern     →   MVVM + Clean Architecture
 Min SDK     →   API 25 · Android 7.1+
 ```
