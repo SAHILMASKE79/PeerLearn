@@ -16,8 +16,8 @@ class PeerLearnApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        // Initialize Firebase and App Check
-        Firebase.initialize(this)
+        // Firebase is automatically initialized by the google-services plugin.
+        // Manual initialization here is redundant and can cause issues.
         Firebase.appCheck.installAppCheckProviderFactory(
             DebugAppCheckProviderFactory.getInstance(),
         )

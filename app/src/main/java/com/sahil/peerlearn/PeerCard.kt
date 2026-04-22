@@ -133,10 +133,10 @@ fun PeerCard(
                     }
 
                     Text(
-                        text = "// ${user.college.ifEmpty { "Learning Peer" }}",
-                        color = PurpleAccent.copy(alpha = 0.85f),
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
+                        text = user.college.ifEmpty { "Learning Peer" },
+                        color = Color(0xFF888AAA),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -270,13 +270,13 @@ fun PeerCard(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 0.dp, end = 12.dp),
-                color = OnlineGreen.copy(alpha = 0.12f),
+                color = PurpleAccent,
                 shape = RoundedCornerShape(6.dp),
-                border = BorderStroke(1.dp, OnlineGreen.copy(alpha = 0.25f))
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
             ) {
                 Text(
                     text = "$matchPercentage% match",
-                    color = OnlineGreen,
+                    color = Color.White,
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -303,12 +303,11 @@ fun SkillRowPremium(
         )
         
         if (skills.isEmpty()) {
-            Text(
-                text = "No skills added",
-                color = Color.Gray,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(vertical = 2.dp)
+            PremiumSkillChip(
+                text = "Not specified",
+                bg = Color(0xFF444466).copy(alpha = 0.2f),
+                textColor = Color(0xFF888AAA),
+                border = Color(0xFF444466).copy(alpha = 0.4f)
             )
         } else {
             val displaySkills = skills.take(3)

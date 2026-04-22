@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">peerlearn</string>
     <!-- Copy this from Firebase Console > Auth > Google > Web SDK config -->
-    <string name="default_web_client_id">1034404319201-xxxxxxxxxxxxxxxx.apps.googleusercontent.com</string>
+    <string name="default_web_client_id">1034404319201-ig0bd8747b300cb3rga1lehkt9f6jeq8.apps.googleusercontent.com</string>
 </resources>

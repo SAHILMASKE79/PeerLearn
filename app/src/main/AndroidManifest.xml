@@ -20,6 +20,7 @@
     <queries>
         <package android:name="com.google.android.gms" />
         <package android:name="com.android.vending" />
+        <package android:name="com.google.android.providers.gsf" />
         <intent>
             <action android:name="com.google.android.gms.auth.api.signin.SERVICE_CONFIG_UPDATER" />
         </intent>
@@ -41,10 +42,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Peerlearn">
-
-        <meta-data
-            android:name="com.google.android.gms.version"
-            android:value="@integer/google_play_services_version" />
 
         <activity
             android:name=".MainActivity"

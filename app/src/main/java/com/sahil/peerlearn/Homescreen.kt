@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -65,16 +66,18 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     var skillSearchQuery by remember { mutableStateOf("") }
 
-    val filteredRecommendedPeers = remember(recommendedPeers, currentUser, skillSearchQuery) {
-        val query = skillSearchQuery.trim()
-        if (query.isEmpty()) {
-            recommendedPeers
-        } else {
-            recommendedPeers.filter { (peer, _) ->
-                peer.teachSkills.any { it.contains(query, ignoreCase = true) } ||
-                    peer.learnSkills.any { it.contains(query, ignoreCase = true) } ||
-                    currentUser?.teachSkills?.any { it.contains(query, ignoreCase = true) && peer.learnSkills.contains(it) } == true ||
-                    currentUser?.learnSkills?.any { it.contains(query, ignoreCase = true) && peer.teachSkills.contains(it) } == true
+    val filteredRecommendedPeers by remember(recommendedPeers, skillSearchQuery) {
+        derivedStateOf {
+            val query = skillSearchQuery.trim()
+            if (query.isEmpty()) {
+                recommendedPeers
+            } else {
+                recommendedPeers.filter { (peer, _) ->
+                    peer.teachSkills.any { it.contains(query, ignoreCase = true) } ||
+                            peer.learnSkills.any { it.contains(query, ignoreCase = true) } ||
+                            currentUser?.teachSkills?.any { it.contains(query, ignoreCase = true) && peer.learnSkills.contains(it) } == true ||
+                            currentUser?.learnSkills?.any { it.contains(query, ignoreCase = true) && peer.teachSkills.contains(it) } == true
+                }
             }
         }
     }
@@ -127,10 +130,11 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding),
-                    contentPadding = PaddingValues(bottom = if (isCompact) 16.dp else 24.dp)
+                    contentPadding = PaddingValues(bottom = if (isCompact) 16.dp else 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     // Section 2: Greeting Card
-                    item {
+                    item(key = "greeting") {
                         GreetingCard(
                             user = currentUser ?: UserProfile(name = user.displayName ?: "Peer"),
                             onProfileClick = onProfileClick,
@@ -140,7 +144,7 @@ fun HomeScreen(
                     }
 
                     // Section 3: Search Bar
-                    item {
+                    item(key = "search_bar") {
                         HomeSearchBar(
                             onClick = onSearchClick,
                             horizontalPadding = horizontalPadding,
@@ -152,134 +156,36 @@ fun HomeScreen(
 
                     // Section 4: Recommended Peers
                     if (filteredRecommendedPeers.isNotEmpty()) {
-                        item {
+                        item(key = "header_recommended") {
                             SectionHeader(
-                                title = "Recommended For You ✨",
+                                title = "Recommended For You",
                                 onSeeAllClick = { /* TODO */ },
                                 horizontalPadding = horizontalPadding,
                                 isCompact = isCompact
                             )
                         }
 
-                        item {
-                            LazyRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(filteredRecommendedPeers) { (peer, match) ->
-                                    Row(
-                                        modifier = Modifier
-                                            .width(280.dp)
-                                            .background(Color(0xFF1A1A2E), RoundedCornerShape(16.dp))
-                                            .border(0.5.dp, Color(0x407C4DFF), RoundedCornerShape(16.dp))
-                                            .padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        // Avatar
-                                        Box(
-                                            modifier = Modifier
-                                                .size(48.dp)
-                                                .background(Color(0xFF2d1f5e), RoundedCornerShape(14.dp)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = peer.name.take(2).uppercase(),
-                                                color = Color(0xFFa78bfa),
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-
-                                        // Info
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                peer.name,
-                                                color = Color(0xFFf0eeff),
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                "// ${peer.teachSkills.firstOrNull() ?: "Developer"}",
-                                                color = Color(0xCC7C4DFF),
-                                                fontSize = 10.sp,
-                                                fontFamily = FontFamily.Monospace
-                                            )
-                                            Spacer(Modifier.height(4.dp))
-                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                peer.teachSkills.take(2).forEach { skill ->
-                                                    Text(
-                                                        skill,
-                                                        modifier = Modifier
-                                                            .background(Color(0x267C4DFF), RoundedCornerShape(4.dp))
-                                                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                                                        color = Color(0xFFa78bfa),
-                                                        fontSize = 9.sp,
-                                                        fontFamily = FontFamily.Monospace
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        // Buttons
-                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            val connectionStatus by viewModel
-                                                .getConnectionStatus(user.uid, peer.uid)
-                                                .collectAsState(initial = "none")
-
-                                            when (connectionStatus) {
-                                                "none" -> {
-                                                    Button(
-                                                        onClick = { viewModel.sendConnectionRequest(user.uid, peer.uid) },
-                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
-                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                                        modifier = Modifier.height(32.dp)
-                                                    ) {
-                                                        Text("Connect", fontSize = 11.sp)
-                                                    }
-                                                }
-                                                "pending" -> {
-                                                    Button(
-                                                        onClick = {},
-                                                        enabled = false,
-                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF444444)),
-                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                                        modifier = Modifier.height(32.dp)
-                                                    ) {
-                                                        Text("Pending...", fontSize = 11.sp, color = Color.LightGray)
-                                                    }
-                                                }
-                                                "connected" -> {
-                                                    Button(
-                                                        onClick = { onChatClick(peer.uid) },
-                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1a5c38)),
-                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                                        modifier = Modifier.height(32.dp)
-                                                    ) {
-                                                        Text("Message", fontSize = 11.sp)
-                                                    }
-                                                }
-                                            }
-                                            OutlinedButton(
-                                                onClick = { onPeerClick(peer.uid) },
-                                                border = BorderStroke(1.dp, Color(0x597C4DFF)),
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                                modifier = Modifier.height(32.dp)
-                                            ) {
-                                                Text("Profile", fontSize = 11.sp, color = Color(0xFFc4a8ff))
-                                            }
-                                        }
-                                    }
-                                }
+                        // Recommended Peers Section - Vertical Layout
+                        items(
+                            items = filteredRecommendedPeers,
+                            key = { "rec_${it.first.uid}" }
+                        ) { (peer, match) ->
+                            Box(modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 4.dp)) {
+                                PeerCard(
+                                    user = peer,
+                                    onViewProfile = { onPeerClick(peer.uid) },
+                                    onConnectClick = { onChatClick(peer.uid) },
+                                    matchPercentage = match,
+                                    isOnline = true,
+                                    currentUid = user.uid,
+                                    viewModel = viewModel
+                                )
                             }
                         }
                         
-                        item { Spacer(Modifier.height(16.dp)) }
+                        item(key = "spacer_recommended") { Spacer(Modifier.height(16.dp)) }
                     } else if (uiState is HomeUiState.Loading) {
-                        item {
+                        item(key = "header_loading_recommended") {
                             SectionHeader(
                                 title = "Finding Peers... 🎯",
                                 onSeeAllClick = { },
@@ -287,20 +193,16 @@ fun HomeScreen(
                                 isCompact = isCompact
                             )
                         }
-                        item {
-                            LazyRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentPadding = PaddingValues(horizontal = horizontalPadding),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                items(3) { ShimmerPeerCard(isVertical = false, compact = isCompact) }
+                        items(3, key = { "shimmer_recommended_$it" }) {
+                            Box(modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 8.dp)) {
+                                ShimmerPeerCard(isVertical = true, compact = isCompact)
                             }
                         }
-                        item { Spacer(Modifier.height(16.dp)) }
+                        item(key = "spacer_loading_recommended") { Spacer(Modifier.height(16.dp)) }
                     }
 
                     // Section 5: All Peers
-                    item {
+                    item(key = "header_all") {
                         SectionHeader(
                             title = "All Peers 👥",
                             onSeeAllClick = { /* TODO */ },
@@ -310,7 +212,7 @@ fun HomeScreen(
                     }
 
                     if (uiState is HomeUiState.Loading) {
-                        items(5) {
+                        items(5, key = { "shimmer_all_$it" }) {
                             Box(modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 8.dp)) {
                                 ShimmerPeerCard(isVertical = true, compact = isCompact)
                             }
@@ -323,12 +225,18 @@ fun HomeScreen(
                             )
                         }
                     } else {
-                        items(allPeers) { peer ->
+                        items(allPeers, key = { it.uid }) { peer ->
                             val interactionSource = remember { MutableInteractionSource() }
                             val isPressed by interactionSource.collectIsPressedAsState()
-                            val scale by animateFloatAsState(
-                                targetValue = if (isPressed) 0.98f else 1f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                            val scale by remember {
+                                derivedStateOf { if (isPressed) 0.98f else 1f }
+                            }
+                            val animatedScale by animateFloatAsState(
+                                targetValue = scale,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                ),
                                 label = "card_click"
                             )
 
@@ -341,7 +249,10 @@ fun HomeScreen(
                                     currentUid = user.uid,
                                     viewModel = viewModel,
                                     modifier = Modifier
-                                        .scale(scale)
+                                        .graphicsLayer {
+                                            scaleX = animatedScale
+                                            scaleY = animatedScale
+                                        }
                                         .clickable(
                                             interactionSource = interactionSource,
                                             indication = null
@@ -368,7 +279,8 @@ fun HomeTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = horizontalPadding, vertical = if (isCompact) 12.dp else 16.dp),
+            .offset(y = (-26).dp)
+            .padding(start = horizontalPadding, end = horizontalPadding, top = 0.dp, bottom = if (isCompact) 4.dp else 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -382,7 +294,7 @@ fun HomeTopBar(
             modifier = Modifier.weight(1f, fill = false)
         )
         
-        Row {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onSearchClick) {
                 Icon(Icons.Rounded.Search, contentDescription = "Search", tint = Color.White)
             }
@@ -543,14 +455,13 @@ fun HomeSearchBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = horizontalPadding, vertical = 8.dp),
+            .padding(horizontal = horizontalPadding, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
             modifier = Modifier
                 .weight(1f)
-                .height(if (isCompact) 44.dp else 48.dp)
-                .clickable { onClick() },
+                .height(if (isCompact) 44.dp else 48.dp),
             shape = RoundedCornerShape(24.dp),
             color = SpaceSurface,
             border = BorderStroke(1.dp, Color(0xFF2A2A3D))
